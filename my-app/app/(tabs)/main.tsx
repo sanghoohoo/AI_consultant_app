@@ -65,6 +65,14 @@ function CustomDrawerContent({
               console.log('새 세션 생성 성공:', data.id);
               setSelectedSessionId(data.id);
               navigation.closeDrawer();
+              
+              // 새 세션이 생성되었음을 로그에 남김
+              console.log('새 세션 데이터:', {
+                id: data.id,
+                user_id: data.user_id,
+                created_at: data.created_at,
+                updated_at: data.updated_at
+              });
             }
           } catch (error) {
             console.error('새 세션 생성 예외:', error);
@@ -80,8 +88,36 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [botStreaming, setBotStreaming] = useState(false);
+  const [streamedBotMessage, setStreamedBotMessage] = useState("");
+  const [userProfile, setUserProfile] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // 사용자 프로필 로드
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user?.id) return;
+        
+        const { data, error } = await supabase
+          .from('user_profile')
+          .select('*')
+          .eq('id', userData.user.id)
+          .single();
+          
+        if (data) {
+          console.log('사용자 프로필 로드됨:', data);
+          setUserProfile(data);
+        }
+      } catch (error) {
+        console.error('프로필 로드 오류:', error);
+      }
+    };
+    
+    fetchProfile();
+  }, []);
 
   // 메시지 로드
   const loadMessages = async () => {
@@ -164,7 +200,46 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
     }
   }, [messages]);
 
-  // WebSocket을 통한 스트리밍 메시지 전송
+  // 세션 요약 함수
+  const summarizeSession = async (sessionId: string, messages: Message[]) => {
+    if (messages.length < 1) return; // 메시지가 없으면 요약하지 않음
+    
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${API_URL}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: messages.map(msg => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender,
+            timestamp: new Date(msg.created_at).getTime()
+          })),
+          sessionId: sessionId,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const summary = result.summary;
+        
+        // 세션 제목 업데이트
+        await supabase
+          .from('chat_sessions')
+          .update({ summary: summary })
+          .eq('id', sessionId);
+          
+        console.log('세션 요약 완료:', summary);
+      }
+    } catch (error) {
+      console.error('세션 요약 오류:', error);
+    }
+  };
+
+  // WebSocket을 통한 스트리밍 메시지 전송 (웹 버전과 동일)
   const sendStreamingMessage = () => {
     if (!inputText.trim() || !sessionId || isLoading) return;
 
@@ -181,7 +256,8 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
     // 사용자 메시지를 즉시 표시
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
-    setIsLoading(true);
+    setBotStreaming(true);
+    setStreamedBotMessage("");
 
     // 사용자 메시지를 DB에 저장
     supabase
@@ -191,13 +267,13 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
         content: userMessage,
         sender: 'user'
       }])
-      .then(() => {
-                          // WebSocket 연결 시도
-          const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
-          const WS_URL = API_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/chat';
+      .then(async () => {
+        // WebSocket 연결 시도 (웹 버전과 동일)
+        const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+        const WS_URL = API_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/chat';
         
         try {
-          let aiMsg = '';
+          let botText = '';
           wsRef.current = new WebSocket(WS_URL);
           
           wsRef.current.onopen = () => {
@@ -210,6 +286,9 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
                 sender: msg.sender,
                 timestamp: new Date(msg.created_at).getTime()
               })),
+              userId: null, // 나중에 사용자 ID 추가 가능
+              attachments: [], // 첨부파일 기능은 나중에 추가
+              profile: userProfile,
             };
             console.log('WebSocket으로 전송할 데이터:', payload);
             wsRef.current?.send(JSON.stringify(payload));
@@ -218,99 +297,76 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           wsRef.current.onmessage = (e) => {
             const data = e.data;
             
-            // 스트리밍 완료 신호 확인
+            // 스트리밍 완료 신호 확인 (웹 버전과 동일)
             if (data === "[STREAM_END]") {
-              console.log('스트리밍 완료, 최종 응답:', aiMsg);
-              // 최종 AI 응답을 DB에 저장
-              if (aiMsg) {
-                supabase
-                  .from('chat_messages')
-                  .insert([{
-                    session_id: sessionId,
-                    content: aiMsg,
-                    sender: 'assistant'
-                  }]);
-              }
-              setIsLoading(false);
+              console.log('스트리밍 완료, 최종 응답:', botText);
+              // 웹 버전처럼 바로 WebSocket 닫기
+              wsRef.current?.close();
               return;
             }
             
-            aiMsg += data;
+            botText += data;
             console.log('스트리밍 데이터 수신:', data);
-            
-            setMessages(prev => {
-              const lastMessage = prev[prev.length - 1];
-              
-              if (lastMessage && lastMessage.sender === 'assistant' && lastMessage.timestamp) {
-                // 기존 AI 메시지 업데이트 (임시 메시지)
-                return [...prev.slice(0, -1), { 
-                  ...lastMessage, 
-                  content: aiMsg 
-                }];
-              } else {
-                // 새 AI 메시지 추가 (임시 메시지, timestamp로 구분)
-                return [...prev, { 
-                  id: `temp-${Date.now()}`, 
-                  session_id: sessionId,
-                  sender: 'assistant', 
-                  content: aiMsg, 
-                  created_at: new Date().toISOString(),
-                  timestamp: Date.now() 
-                }];
-              }
-            });
+            setStreamedBotMessage(botText);
           };
 
-                wsRef.current.onerror = (error) => {
+          wsRef.current.onerror = (error) => {
             console.error('WebSocket 오류:', error);
-            // WebSocket 실패 시 기본 응답
-            handleFallbackResponse(userMessage, sessionId);
+            setBotStreaming(false);
+            setStreamedBotMessage('AI 응답 중 에러 발생');
+            wsRef.current?.close();
           };
 
-          wsRef.current.onclose = () => {
+          wsRef.current.onclose = async () => {
             console.log('WebSocket 연결 종료');
-            setIsLoading(false);
+            setBotStreaming(false);
+            
+            // 웹 버전과 동일하게 최종 메시지 처리
+            const botMessage: Message = {
+              id: (Date.now() + 1).toString(),
+              session_id: sessionId,
+              content: botText || 'AI 응답이 없습니다.',
+              sender: 'assistant',
+              created_at: new Date().toISOString(),
+            };
+            
+            await supabase.from('chat_messages').insert([{
+              session_id: sessionId,
+              content: botMessage.content,
+              sender: 'assistant'
+            }]);
+            
+            setMessages((prev: Message[]) => [...prev, botMessage]);
+            setStreamedBotMessage("");
+            
+            // 세션 요약 실행
+            const updatedMessages = [...messages, userMsg, botMessage];
+            summarizeSession(sessionId, updatedMessages);
           };
 
-                          } catch (error) {
-           console.error('WebSocket 연결 오류:', error);
-           handleFallbackResponse(userMessage, sessionId);
-         }
+        } catch (error) {
+          console.error('WebSocket 연결 오류:', error);
+          setBotStreaming(false);
+          // 오류 시 fallback 응답
+          const fallbackMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            session_id: sessionId,
+            content: '죄송합니다. 현재 AI 서비스에 연결할 수 없습니다. 네트워크를 확인하고 잠시 후 다시 시도해주세요.',
+            sender: 'assistant',
+            created_at: new Date().toISOString(),
+          };
+          
+          setMessages(prev => [...prev, fallbackMessage]);
+          await supabase.from('chat_messages').insert([{
+            session_id: sessionId,
+            content: fallbackMessage.content,
+            sender: 'assistant'
+          }]);
+        }
       });
   };
 
-  // Fallback 응답 처리
-  const handleFallbackResponse = async (userMessage: string, sessionId: string) => {
-    let fallbackResponse = '';
-    if (userMessage.includes('안녕') || userMessage.includes('hello')) {
-      fallbackResponse = '안녕하세요! AI 교육 상담사입니다. 대학 입시와 관련된 질문이 있으시면 언제든지 물어보세요.';
-    } else if (userMessage.includes('대학') || userMessage.includes('입시')) {
-      fallbackResponse = `"${userMessage}"에 대한 질문이군요. 현재 백엔드 서버와 연결할 수 없어서 자세한 입시 정보를 제공할 수 없습니다. 서버 연결 후 다시 질문해주시면 더 정확한 정보를 드릴 수 있습니다.`;
-    } else {
-      fallbackResponse = '죄송합니다. 현재 AI 서비스에 연결할 수 없습니다. 네트워크를 확인하고 잠시 후 다시 시도해주세요.';
-    }
 
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      session_id: sessionId,
-      content: fallbackResponse,
-      sender: 'assistant',
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, aiMessage]);
-    
-    // DB에도 저장
-    await supabase
-      .from('chat_messages')
-      .insert([{
-        session_id: sessionId,
-        content: fallbackResponse,
-        sender: 'assistant'
-      }]);
-    
-    setIsLoading(false);
-  };
 
   // 메시지 렌더링
   const renderMessage = ({ item }: { item: Message }) => (
@@ -365,7 +421,7 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
       {/* 메시지 목록 */}
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={[...messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         style={styles.messagesContainer}
@@ -375,14 +431,20 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        ListFooterComponent={() => (
+          botStreaming ? (
+            <View style={[styles.messageWrapper, styles.aiMessageWrapper]}>
+              <View style={[styles.messageBubble, styles.aiMessage]}>
+                <Text style={[styles.messageText, styles.aiMessageText]}>
+                  {streamedBotMessage || 'AI가 응답을 생성중입니다...'}
+                </Text>
+              </View>
+            </View>
+          ) : null
+        )}
       />
 
-      {/* 로딩 표시 */}
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>AI가 응답을 생성중입니다...</Text>
-        </View>
-      )}
+      {/* 로딩 표시는 스트리밍으로 대체 */}
 
       {/* 입력창 */}
       <View style={[
@@ -401,9 +463,9 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           returnKeyType="send"
         />
         <TouchableOpacity
-          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (!inputText.trim() || botStreaming) && styles.sendButtonDisabled]}
           onPress={sendStreamingMessage}
-          disabled={!inputText.trim() || isLoading}
+          disabled={!inputText.trim() || botStreaming}
         >
           <Text style={styles.sendButtonText}>전송</Text>
         </TouchableOpacity>

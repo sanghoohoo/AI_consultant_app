@@ -12,36 +12,90 @@ interface ChatSessionListProps {
 
 export default function ChatSessionList({ userId, selectedId, onSelect, onNewSession }: ChatSessionListProps) {
   const [sessions, setSessions] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadSessions = async () => {
+    if (!userId) {
+      console.log('ChatSessionList: userId가 없음');
+      return;
+    }
+    
+    try {
+      console.log('ChatSessionList: 세션 목록 로딩 중... userId:', userId);
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+        
+      if (error) {
+        console.error('ChatSessionList: 세션 로딩 오류:', error);
+        setSessions([]);
+      } else {
+        console.log('ChatSessionList: 로딩된 세션 수:', data?.length || 0);
+        setSessions(data || []);
+      }
+    } catch (error) {
+      console.error('ChatSessionList: 예외 발생:', error);
+      setSessions([]);
+    }
+  };
+
+  // 수동 새로고침 함수
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadSessions();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
-    const loadSessions = async () => {
-      if (!userId) {
-        console.log('ChatSessionList: userId가 없음');
-        return;
-      }
-      
-      try {
-        console.log('ChatSessionList: 세션 목록 로딩 중... userId:', userId);
-        const { data, error } = await supabase
-          .from('chat_sessions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('updated_at', { ascending: false });
-          
-        if (error) {
-          console.error('ChatSessionList: 세션 로딩 오류:', error);
-          setSessions([]);
-        } else {
-          console.log('ChatSessionList: 로딩된 세션 수:', data?.length || 0);
-          setSessions(data || []);
-        }
-      } catch (error) {
-        console.error('ChatSessionList: 예외 발생:', error);
-        setSessions([]);
-      }
-    };
-
     loadSessions();
+
+    // 실시간 세션 업데이트 구독
+    console.log('ChatSessionList: 실시간 구독 설정 중... userId:', userId);
+    const subscription = supabase
+      .channel(`chat_sessions_${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_sessions',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('ChatSessionList: 새 세션 추가됨', payload.new);
+          setSessions(prev => {
+            const updated = [payload.new, ...prev];
+            console.log('ChatSessionList: 세션 목록 업데이트됨, 총 개수:', updated.length);
+            return updated;
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_sessions',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('ChatSessionList: 세션 업데이트됨', payload.new);
+          setSessions(prev => 
+            prev.map(session => 
+              session.id === payload.new.id ? payload.new : session
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    console.log('ChatSessionList: 구독 상태:', subscription);
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [userId]);
 
   return (
@@ -82,6 +136,8 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
     </SafeAreaView>
   );
