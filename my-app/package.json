@@ -8,7 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest --watchAll"
+    "test": "jest --watchAll",
+    "setup": "npm install && echo '환경 설정 파일(.env)을 생성하고 Supabase 정보를 입력하세요.'",
+    "clean": "expo start --clear",
+    "build:android": "expo build:android",
+    "build:ios": "expo build:ios"
   },
   "jest": {
     "preset": "jest-expo"
