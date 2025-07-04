@@ -1,6 +1,6 @@
+import { Tabs } from 'expo-router';
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Tabs } from 'expo-router';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -20,13 +20,27 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false, // 모든 탭에서 헤더 숨김
+        headerShown: false,
       }}>
       <Tabs.Screen
         name="main"
         options={{
           title: '채팅',
           tabBarIcon: ({ color }) => <TabBarIcon name="comments" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="board"
+        options={{
+          title: '게시판',
+          tabBarIcon: ({ color }) => <TabBarIcon name="list-alt" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: '설정',
+          tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
         }}
       />
     </Tabs>

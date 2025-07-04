@@ -10,6 +10,7 @@ import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { supabase } from '../lib/supabaseClient';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -103,6 +104,7 @@ function RootLayoutNav({ isLoggedIn }: { isLoggedIn: boolean }) {
   console.log('[네비게이션] 라우팅 결정:', isLoggedIn ? '(tabs)' : '(auth)');
 
   return (
+    <AuthProvider>
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
@@ -115,6 +117,7 @@ function RootLayoutNav({ isLoggedIn }: { isLoggedIn: boolean }) {
         </Stack>
       </ThemeProvider>
     </SafeAreaProvider>
+    </AuthProvider>
   );
 }
 

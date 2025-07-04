@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createDrawerNavigator, DrawerContentComponentProps } from '@react-navigation/drawer';
+import { useDrawerStatus } from '@react-navigation/drawer';
 import { 
   View, 
   Text, 
@@ -12,10 +13,240 @@ import {
   Alert,
   Keyboard
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../../lib/supabaseClient';
 import ChatSessionList from '../../components/ChatSessionList';
 
 const Drawer = createDrawerNavigator();
+
+// 간단한 마크다운 렌더링 컴포넌트
+const MarkdownRenderer = ({ content, style }: { content: string; style?: any }) => {
+  const renderMarkdownText = (text: string) => {
+    const elements: React.ReactNode[] = [];
+    const lines = text.split('\n');
+    let key = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // 코드 블록 처리 (```)
+      if (line.trim().startsWith('```')) {
+        const codeLines = [];
+        i++; // 시작 ```를 넘어감
+        
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        
+        elements.push(
+          <View key={key++} style={{
+            backgroundColor: '#f6f8fa',
+            borderRadius: 6,
+            padding: 12,
+            marginVertical: 4,
+          }}>
+            <Text style={{
+              fontFamily: 'monospace',
+              fontSize: 14,
+              color: style?.color || '#333',
+            }}>
+              {codeLines.join('\n')}
+            </Text>
+          </View>
+        );
+        continue;
+      }
+      
+      // 제목 처리
+      if (line.startsWith('# ')) {
+        elements.push(
+          <Text key={key++} style={{
+            fontSize: 24,
+            fontWeight: 'bold',
+            marginVertical: 8,
+            color: style?.color || '#333',
+          }}>
+            {line.replace('# ', '')}
+          </Text>
+        );
+        continue;
+      }
+      
+      if (line.startsWith('## ')) {
+        elements.push(
+          <Text key={key++} style={{
+            fontSize: 20,
+            fontWeight: 'bold',
+            marginVertical: 6,
+            color: style?.color || '#333',
+          }}>
+            {line.replace('## ', '')}
+          </Text>
+        );
+        continue;
+      }
+      
+      if (line.startsWith('### ')) {
+        elements.push(
+          <Text key={key++} style={{
+            fontSize: 18,
+            fontWeight: 'bold',
+            marginVertical: 4,
+            color: style?.color || '#333',
+          }}>
+            {line.replace('### ', '')}
+          </Text>
+        );
+        continue;
+      }
+      
+      // 목록 처리
+      if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+        elements.push(
+          <View key={key++} style={{ flexDirection: 'row', marginVertical: 2 }}>
+            <Text style={{ marginRight: 8, color: style?.color || '#333' }}>•</Text>
+            <Text style={{
+              flex: 1,
+              fontSize: style?.fontSize || 16,
+              color: style?.color || '#333',
+            }}>
+              {renderInlineMarkdown(line.replace(/^[\s]*[-*]\s/, ''))}
+            </Text>
+          </View>
+        );
+        continue;
+      }
+      
+      // 인용구 처리
+      if (line.startsWith('> ')) {
+        elements.push(
+          <View key={key++} style={{
+            backgroundColor: '#f6f8fa',
+            borderLeftWidth: 4,
+            borderLeftColor: '#dfe2e5',
+            paddingLeft: 12,
+            paddingVertical: 8,
+            marginVertical: 4,
+          }}>
+            <Text style={{
+              fontSize: style?.fontSize || 16,
+              color: style?.color || '#333',
+            }}>
+              {renderInlineMarkdown(line.replace('> ', ''))}
+            </Text>
+          </View>
+        );
+        continue;
+      }
+      
+      // 일반 텍스트 (줄바꿈이 아닌 경우만)
+      if (line.trim()) {
+        elements.push(
+          <Text key={key++} style={{
+            fontSize: style?.fontSize || 16,
+            lineHeight: style?.lineHeight || 24,
+            color: style?.color || '#333',
+            marginVertical: 2,
+          }}>
+            {renderInlineMarkdown(line)}
+          </Text>
+        );
+      }
+    }
+
+    return elements;
+  };
+
+  const renderInlineMarkdown = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    let remaining = text;
+    let key = 0;
+
+    // 인라인 코드 처리 `code`
+    const codeRegex = /`([^`]+)`/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeRegex.exec(text)) !== null) {
+      // 코드 앞의 텍스트
+      if (match.index > lastIndex) {
+        const beforeText = text.slice(lastIndex, match.index);
+        parts.push(...processBoldItalic(beforeText, key));
+      }
+      
+      // 코드
+      parts.push(
+        <Text key={`code-${key++}`} style={{
+          backgroundColor: '#f0f0f0',
+          color: '#d73a49',
+          borderRadius: 3,
+          paddingHorizontal: 4,
+          paddingVertical: 2,
+          fontSize: 14,
+          fontFamily: 'monospace',
+        }}>
+          {match[1]}
+        </Text>
+      );
+      
+      lastIndex = match.index + match[0].length;
+    }
+
+    // 남은 텍스트
+    if (lastIndex < text.length) {
+      const remainingText = text.slice(lastIndex);
+      parts.push(...processBoldItalic(remainingText, key));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
+  const processBoldItalic = (text: string, startKey: number) => {
+    const parts: React.ReactNode[] = [];
+    let key = startKey;
+
+    // **굵은 글씨**와 *기울임* 처리
+    const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      // 마크다운 앞의 텍스트
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      if (match[1]) {
+        // **굵은 글씨**
+        parts.push(
+          <Text key={`bold-${key++}`} style={{ fontWeight: 'bold' }}>
+            {match[2]}
+          </Text>
+        );
+      } else if (match[3]) {
+        // *기울임*
+        parts.push(
+          <Text key={`italic-${key++}`} style={{ fontStyle: 'italic' }}>
+            {match[4]}
+          </Text>
+        );
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // 남은 텍스트
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : [text];
+  };
+
+  return <View>{renderMarkdownText(content)}</View>;
+};
+
 
 interface Message {
   id: string;
@@ -38,6 +269,20 @@ function CustomDrawerContent({
   setSelectedSessionId,
   userId,
 }: CustomDrawerContentProps) {
+  const drawerStatus = useDrawerStatus();
+  const isDrawerOpen = drawerStatus === 'open';
+
+  // 세션 삭제 핸들러
+  const handleDeleteSession = (deletedSessionId: string) => {
+    console.log('세션 삭제됨:', deletedSessionId);
+    
+    // 현재 선택된 세션이 삭제된 경우 선택 해제
+    if (selectedSessionId === deletedSessionId) {
+      console.log('현재 선택된 세션이 삭제됨, 선택 해제');
+      setSelectedSessionId(null);
+    }
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <ChatSessionList
@@ -47,6 +292,8 @@ function CustomDrawerContent({
           setSelectedSessionId(id);
           navigation.closeDrawer();
         }}
+        onDelete={handleDeleteSession}
+        drawerOpen={isDrawerOpen}
         onNewSession={async () => {
           try {
             console.log('새 세션 생성 시작... userId:', userId);
@@ -382,12 +629,19 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           item.sender === 'user' ? styles.userMessage : styles.aiMessage
         ]}
       >
+        {item.sender === 'user' ? (
         <Text style={[
           styles.messageText,
-          item.sender === 'user' ? styles.userMessageText : styles.aiMessageText
+            styles.userMessageText
         ]}>
           {item.content}
         </Text>
+        ) : (
+          <MarkdownRenderer 
+            content={item.content}
+            style={styles.aiMessageText}
+          />
+        )}
       </View>
     </View>
   );
@@ -435,9 +689,10 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           botStreaming ? (
             <View style={[styles.messageWrapper, styles.aiMessageWrapper]}>
               <View style={[styles.messageBubble, styles.aiMessage]}>
-                <Text style={[styles.messageText, styles.aiMessageText]}>
-                  {streamedBotMessage || 'AI가 응답을 생성중입니다...'}
-                </Text>
+                <MarkdownRenderer 
+                  content={streamedBotMessage || 'AI가 응답을 생성중입니다...'}
+                  style={styles.aiMessageText}
+                />
               </View>
             </View>
           ) : null
@@ -570,6 +825,7 @@ export default function Main() {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <Drawer.Navigator
       drawerContent={(props) => (
         <CustomDrawerContent
@@ -582,6 +838,9 @@ export default function Main() {
       screenOptions={{
         headerShown: true,
         drawerType: 'slide',
+          swipeEnabled: true,
+          swipeEdgeWidth: 50,
+          swipeMinDistance: 10,
       }}
     >
       <Drawer.Screen 
@@ -593,6 +852,7 @@ export default function Main() {
         {() => <ChatScreen sessionId={selectedSessionId} />}
       </Drawer.Screen>
     </Drawer.Navigator>
+    </GestureHandlerRootView>
   );
 }
 
