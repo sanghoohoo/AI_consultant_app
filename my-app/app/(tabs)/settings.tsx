@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'expo-router';
+import { useColorScheme } from '../../components/useColorScheme';
+import Colors from '../../constants/Colors';
 
 interface UserProfile {
   id: string;
@@ -45,7 +47,26 @@ export default function Settings() {
   const [selectionModalVisible, setSelectionModalVisible] = useState(false);
   const [inputMode, setInputMode] = useState<'quick' | 'detail' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+    cardBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    text: colorScheme === 'dark' ? '#fff' : '#333',
+    secondaryText: colorScheme === 'dark' ? '#ccc' : '#666',
+    inputBackground: colorScheme === 'dark' ? '#3d3d3d' : '#f5f5f5',
+    border: colorScheme === 'dark' ? '#444' : '#e9ecef',
+    buttonBackground: colorScheme === 'dark' ? '#4d4d4d' : '#f5f5f5',
+    activeButton: '#007AFF',
+    modalOverlay: 'rgba(0, 0, 0, 0.5)',
+    selectionButton: colorScheme === 'dark' ? '#3d3d3d' : '#f8f9fa',
+    addProfileBackground: colorScheme === 'dark' ? '#1a2a3a' : '#f0f8ff',
+    percentileBackground: colorScheme === 'dark' ? '#1a2332' : '#e3f2fd',
+    percentileText: colorScheme === 'dark' ? '#64b5f6' : '#1976d2',
+  };
 
   // 폼 상태
   const [formData, setFormData] = useState({
@@ -76,6 +97,7 @@ export default function Settings() {
   useEffect(() => {
     const loadUserInfo = async () => {
       try {
+        setProfileLoading(true);
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
         
@@ -118,6 +140,8 @@ export default function Settings() {
         }
       } catch (error) {
         console.error('사용자 정보 로드 오류:', error);
+      } finally {
+        setProfileLoading(false);
       }
     };
 
@@ -202,11 +226,14 @@ export default function Settings() {
     return korean + math + inquiryAvg;
   };
 
+  // 동적 스타일 생성
+  const styles = createStyles(themeColors);
+
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Text style={styles.loadingText}>로딩 중...</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          {/* 로딩 중 텍스트 제거 - 점선 효과 방지 */}
         </View>
       </SafeAreaView>
     );
@@ -247,7 +274,11 @@ export default function Settings() {
             </TouchableOpacity>
           </View>
           
-          {userProfile ? (
+          {profileLoading ? (
+            <View style={styles.profileLoadingContainer}>
+              {/* 로딩 중에는 빈 공간으로 유지 */}
+            </View>
+          ) : userProfile ? (
             <View style={styles.profileInfo}>
               <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>이름:</Text>
@@ -855,20 +886,12 @@ export default function Settings() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (themeColors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themeColors.background,
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
-  },
+
   scrollView: {
     flex: 1,
   },
@@ -876,28 +899,25 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.cardBackground,
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: themeColors.text,
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.cardBackground,
     marginTop: 10,
     padding: 20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#e9ecef',
+    borderRadius: 8,
+    marginHorizontal: 10,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: themeColors.text,
     marginBottom: 15,
   },
   sectionHeader: {
@@ -941,42 +961,36 @@ const styles = StyleSheet.create({
   emailText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: themeColors.text,
     marginBottom: 4,
   },
   joinDate: {
     fontSize: 14,
-    color: '#666',
+    color: themeColors.secondaryText,
   },
   profileInfo: {
-    borderWidth: 1,
-    borderColor: '#e9ecef',
     borderRadius: 8,
     padding: 15,
-    backgroundColor: '#fafafa',
+    backgroundColor: themeColors.inputBackground,
   },
   profileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   profileLabel: {
     fontSize: 14,
-    color: '#666',
+    color: themeColors.secondaryText,
     fontWeight: '500',
   },
   profileValue: {
     fontSize: 14,
-    color: '#333',
+    color: themeColors.text,
     fontWeight: '500',
   },
   addProfileButton: {
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderStyle: 'dashed',
+    backgroundColor: themeColors.addProfileBackground,
     borderRadius: 8,
     padding: 20,
     alignItems: 'center',
@@ -985,6 +999,10 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  profileLoadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   logoutButton: {
     backgroundColor: '#ff4757',
@@ -1000,7 +1018,7 @@ const styles = StyleSheet.create({
   // 모달 스타일
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themeColors.background,
   },
   modalContent: {
     paddingBottom: 50,
@@ -1010,14 +1028,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    backgroundColor: themeColors.cardBackground,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: themeColors.text,
   },
   cancelButton: {
     fontSize: 16,
@@ -1029,10 +1045,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   disabledButton: {
-    color: '#999',
+    color: themeColors.secondaryText,
   },
   formSection: {
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.cardBackground,
     margin: 10,
     padding: 20,
     borderRadius: 8,
@@ -1045,7 +1061,7 @@ const styles = StyleSheet.create({
   formSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: themeColors.text,
     marginBottom: 15,
   },
   inputGroup: {
@@ -1054,24 +1070,22 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: themeColors.text,
     marginBottom: 8,
   },
   textInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.inputBackground,
+    color: themeColors.text,
   },
   textArea: {
-    borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.inputBackground,
+    color: themeColors.text,
     minHeight: 100,
   },
   gradeContainer: {
@@ -1081,19 +1095,16 @@ const styles = StyleSheet.create({
   gradeButton: {
     flex: 1,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.buttonBackground,
   },
   gradeButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: themeColors.activeButton,
   },
   gradeButtonText: {
     fontSize: 14,
-    color: '#333',
+    color: themeColors.text,
     fontWeight: '500',
   },
   gradeButtonTextActive: {
@@ -1107,18 +1118,15 @@ const styles = StyleSheet.create({
   majorButton: {
     paddingHorizontal: 15,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.buttonBackground,
   },
   majorButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: themeColors.activeButton,
   },
   majorButtonText: {
     fontSize: 14,
-    color: '#333',
+    color: themeColors.text,
     fontWeight: '500',
   },
   majorButtonTextActive: {
@@ -1132,7 +1140,7 @@ const styles = StyleSheet.create({
   suneungSubject: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: themeColors.text,
     width: 50,
   },
   suneungInputs: {
@@ -1142,25 +1150,24 @@ const styles = StyleSheet.create({
   },
   suneungInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
-    backgroundColor: '#fff',
+    backgroundColor: themeColors.inputBackground,
+    color: themeColors.text,
     textAlign: 'center',
   },
   disabledInput: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themeColors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
   disabledText: {
-    color: '#999',
+    color: themeColors.secondaryText,
     fontSize: 14,
   },
   totalPercentile: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: themeColors.percentileBackground,
     padding: 15,
     borderRadius: 8,
     marginTop: 15,
@@ -1168,20 +1175,20 @@ const styles = StyleSheet.create({
   totalPercentileText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1976d2',
+    color: themeColors.percentileText,
     textAlign: 'center',
   },
   
   // 선택 모달 스타일
   selectionModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: themeColors.modalOverlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   selectionModalContent: {
-    backgroundColor: 'white',
+    backgroundColor: themeColors.cardBackground,
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -1200,32 +1207,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
-    color: '#1a1a1a',
+    color: themeColors.text,
   },
   selectionModalSubtitle: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
-    color: '#666',
+    color: themeColors.secondaryText,
     lineHeight: 22,
   },
   selectionButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: themeColors.selectionButton,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
   },
   selectionButtonTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: themeColors.text,
     marginBottom: 4,
   },
   selectionButtonSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: themeColors.secondaryText,
     lineHeight: 20,
   },
   cancelSelectionButton: {
@@ -1237,7 +1242,7 @@ const styles = StyleSheet.create({
   },
   cancelSelectionButtonText: {
     fontSize: 16,
-    color: '#666',
+    color: themeColors.secondaryText,
     fontWeight: '500',
   },
 }); 

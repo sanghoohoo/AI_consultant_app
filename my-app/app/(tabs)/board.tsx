@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
+import { useColorScheme } from '../../components/useColorScheme';
 
 // 타입 정의
 interface Category {
@@ -51,6 +52,7 @@ interface Comment {
 
 export default function BoardScreen() {
   const { user } = useAuth();
+  const colorScheme = useColorScheme();
   const [categories, setCategories] = useState<Category[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -65,6 +67,25 @@ export default function BoardScreen() {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [showMyPosts, setShowMyPosts] = useState(false);
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+    cardBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    text: colorScheme === 'dark' ? '#fff' : '#333',
+    secondaryText: colorScheme === 'dark' ? '#ccc' : '#666',
+    border: colorScheme === 'dark' ? '#444' : '#e1e1e1',
+    inputBackground: colorScheme === 'dark' ? '#3d3d3d' : '#fff',
+    inputBorder: colorScheme === 'dark' ? '#555' : '#ddd',
+    categoryActive: '#007AFF',
+    categoryInactive: colorScheme === 'dark' ? '#3d3d3d' : '#e1e1e1',
+    categoryActiveText: '#fff',
+    categoryInactiveText: colorScheme === 'dark' ? '#ccc' : '#666',
+    modalBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    modalOverlay: 'rgba(0, 0, 0, 0.5)',
+    likeActive: '#ff3b30',
+    likeInactive: colorScheme === 'dark' ? '#666' : '#ccc',
+  };
 
   // 카테고리 목록 가져오기
   const fetchCategories = async () => {
@@ -518,7 +539,11 @@ export default function BoardScreen() {
   // 게시글 아이템 렌더링
   const renderPost = ({ item }: { item: Post }) => (
     <TouchableOpacity
-      style={[styles.postItem, item.is_pinned && styles.pinnedPost]}
+      style={[
+        styles.postItem, 
+        { backgroundColor: themeColors.cardBackground, borderBottomColor: themeColors.border },
+        item.is_pinned && styles.pinnedPost
+      ]}
       onPress={() => openPostDetail(item)}
       activeOpacity={0.7}
     >
@@ -527,19 +552,19 @@ export default function BoardScreen() {
           {item.is_pinned && (
             <Text style={styles.pinnedBadge}>📌</Text>
           )}
-          <Text style={styles.postTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={[styles.postTitle, { color: themeColors.text }]} numberOfLines={2}>{item.title}</Text>
         </View>
       </View>
-      <Text style={styles.postContentText} numberOfLines={3}>{item.content}</Text>
+      <Text style={[styles.postContentText, { color: themeColors.secondaryText }]} numberOfLines={3}>{item.content}</Text>
       <View style={styles.postFooter}>
-        <Text style={styles.postAuthor}>{item.author_name}</Text>
+        <Text style={[styles.postAuthor, { color: themeColors.secondaryText }]}>{item.author_name}</Text>
         <View style={styles.postStats}>
-          <Text style={[styles.postStat, { marginLeft: 0 }]}>👁 {item.view_count}</Text>
-          <Text style={styles.postStat}>💬 {item.comment_count}</Text>
-          <Text style={styles.postStat}>❤️ {item.like_count}</Text>
+          <Text style={[styles.postStat, { marginLeft: 0, color: themeColors.secondaryText }]}>👁 {item.view_count}</Text>
+          <Text style={[styles.postStat, { color: themeColors.secondaryText }]}>💬 {item.comment_count}</Text>
+          <Text style={[styles.postStat, { color: themeColors.secondaryText }]}>❤️ {item.like_count}</Text>
         </View>
       </View>
-      <Text style={styles.postDate}>
+      <Text style={[styles.postDate, { color: themeColors.secondaryText }]}>
         {new Date(item.created_at).toLocaleString('ko-KR')}
       </Text>
     </TouchableOpacity>
@@ -548,9 +573,9 @@ export default function BoardScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       {/* 카테고리 탭 */}
-      <View style={styles.categoryContainer}>
+      <View style={[styles.categoryContainer, { backgroundColor: themeColors.cardBackground, borderBottomColor: themeColors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.categoryList}>
             {/* 내가 쓴 글 토글 */}
@@ -558,7 +583,10 @@ export default function BoardScreen() {
               style={[
                 styles.categoryTab,
                 styles.myPostsTab,
-                showMyPosts && styles.selectedCategoryTab
+                { 
+                  backgroundColor: showMyPosts ? themeColors.categoryActive : themeColors.categoryInactive,
+                  borderColor: themeColors.border 
+                }
               ]}
               onPress={() => {
                 setShowMyPosts(!showMyPosts);
@@ -570,7 +598,7 @@ export default function BoardScreen() {
               <Text style={styles.categoryIcon}>📝</Text>
               <Text style={[
                 styles.categoryName,
-                showMyPosts && styles.selectedCategoryName
+                { color: showMyPosts ? themeColors.categoryActiveText : themeColors.categoryInactiveText }
               ]}>
                 내가 쓴 글
               </Text>
@@ -582,7 +610,10 @@ export default function BoardScreen() {
                 key={item.id}
                 style={[
                   styles.categoryTab,
-                  selectedCategory === item.id && !showMyPosts && styles.selectedCategoryTab
+                  { 
+                    backgroundColor: (selectedCategory === item.id && !showMyPosts) ? themeColors.categoryActive : themeColors.categoryInactive,
+                    borderColor: themeColors.border 
+                  }
                 ]}
                 onPress={() => {
                   setSelectedCategory(item.id);
@@ -592,7 +623,7 @@ export default function BoardScreen() {
                 <Text style={styles.categoryIcon}>{item.icon}</Text>
                 <Text style={[
                   styles.categoryName,
-                  selectedCategory === item.id && !showMyPosts && styles.selectedCategoryName
+                  { color: (selectedCategory === item.id && !showMyPosts) ? themeColors.categoryActiveText : themeColors.categoryInactiveText }
                 ]}>
                   {item.name}
                 </Text>
@@ -614,10 +645,10 @@ export default function BoardScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: themeColors.text }]}>
               {showMyPosts ? '작성한 게시글이 없습니다.' : '게시글이 없습니다.'}
             </Text>
-            <Text style={styles.emptySubText}>
+            <Text style={[styles.emptySubText, { color: themeColors.secondaryText }]}>
               {showMyPosts ? '첫 번째 게시글을 작성해보세요!' : '첫 번째 게시글을 작성해보세요!'}
             </Text>
           </View>
@@ -638,15 +669,15 @@ export default function BoardScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.modalBackground }]}>
+          <View style={[styles.modalHeader, { backgroundColor: themeColors.modalBackground, borderBottomColor: themeColors.border }]}>
             <TouchableOpacity
               onPress={() => setShowWriteModal(false)}
               style={styles.modalButton}
             >
-              <Text style={styles.modalButtonText}>취소</Text>
+              <Text style={[styles.modalButtonText, { color: themeColors.text }]}>취소</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>새 게시글</Text>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>새 게시글</Text>
             <TouchableOpacity
               onPress={createPost}
               style={styles.modalButton}
@@ -655,17 +686,33 @@ export default function BoardScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { backgroundColor: themeColors.modalBackground }]}>
             <TextInput
-              style={styles.titleInput}
+              style={[
+                styles.titleInput,
+                { 
+                  backgroundColor: themeColors.inputBackground,
+                  borderColor: themeColors.inputBorder,
+                  color: themeColors.text
+                }
+              ]}
               placeholder="제목을 입력하세요"
+              placeholderTextColor={themeColors.secondaryText}
               value={newPost.title}
               onChangeText={(text) => setNewPost(prev => ({ ...prev, title: text }))}
               multiline={false}
             />
             <TextInput
-              style={styles.contentInput}
+              style={[
+                styles.contentInput,
+                { 
+                  backgroundColor: themeColors.inputBackground,
+                  borderColor: themeColors.inputBorder,
+                  color: themeColors.text
+                }
+              ]}
               placeholder="내용을 입력하세요"
+              placeholderTextColor={themeColors.secondaryText}
               value={newPost.content}
               onChangeText={(text) => setNewPost(prev => ({ ...prev, content: text }))}
               multiline
@@ -681,8 +728,8 @@ export default function BoardScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.modalBackground }]}>
+          <View style={[styles.modalHeader, { backgroundColor: themeColors.modalBackground, borderBottomColor: themeColors.border }]}>
             <TouchableOpacity
               onPress={() => {
                 setShowDetailModal(false);
@@ -692,9 +739,9 @@ export default function BoardScreen() {
               }}
               style={styles.modalButton}
             >
-              <Text style={styles.modalButtonText}>닫기</Text>
+              <Text style={[styles.modalButtonText, { color: themeColors.text }]}>닫기</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>게시글</Text>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>게시글</Text>
             {selectedPost && user?.id === selectedPost.author_id ? (
               <TouchableOpacity
                 onPress={() => deletePost(selectedPost.id, selectedPost.author_id)}
@@ -708,29 +755,29 @@ export default function BoardScreen() {
           </View>
 
           {selectedPost && (
-            <ScrollView style={styles.modalContent}>
+            <ScrollView style={[styles.modalContent, { backgroundColor: themeColors.modalBackground }]}>
               <View style={styles.postDetailContainer}>
                 {selectedPost.is_pinned && (
                   <Text style={styles.pinnedBadge}>📌 공지</Text>
                 )}
-                <Text style={styles.postDetailTitle}>{selectedPost.title}</Text>
+                <Text style={[styles.postDetailTitle, { color: themeColors.text }]}>{selectedPost.title}</Text>
                 
                 <View style={styles.postDetailInfo}>
-                  <Text style={styles.postDetailAuthor}>{selectedPost.author_name}</Text>
-                  <Text style={styles.postDetailDate}>
+                  <Text style={[styles.postDetailAuthor, { color: themeColors.secondaryText }]}>{selectedPost.author_name}</Text>
+                  <Text style={[styles.postDetailDate, { color: themeColors.secondaryText }]}>
                     {new Date(selectedPost.created_at).toLocaleString('ko-KR')}
                   </Text>
                 </View>
 
                 <View style={styles.postDetailStats}>
-                  <Text style={styles.postDetailStat}>👁 {selectedPost.view_count}</Text>
-                  <Text style={styles.postDetailStat}>💬 {selectedPost.comment_count}</Text>
-                  <Text style={styles.postDetailStat}>❤️ {selectedPost.like_count}</Text>
+                  <Text style={[styles.postDetailStat, { color: themeColors.secondaryText }]}>👁 {selectedPost.view_count}</Text>
+                  <Text style={[styles.postDetailStat, { color: themeColors.secondaryText }]}>💬 {selectedPost.comment_count}</Text>
+                  <Text style={[styles.postDetailStat, { color: themeColors.secondaryText }]}>❤️ {selectedPost.like_count}</Text>
                 </View>
 
-                <View style={styles.divider} />
+                <View style={[styles.divider, { backgroundColor: themeColors.border }]} />
                 
-                <Text style={styles.postDetailContent}>{selectedPost.content}</Text>
+                <Text style={[styles.postDetailContent, { color: themeColors.text }]}>{selectedPost.content}</Text>
 
                 {/* 댓글 섹션 */}
                 <View style={styles.commentsSection}>
@@ -740,8 +787,14 @@ export default function BoardScreen() {
                       onPress={() => togglePostLike(selectedPost.id)}
                       style={[
                         styles.actionButton,
-                        styles.likeActionButton,
-                        likedPosts.has(selectedPost.id) && styles.likeActionButtonActive
+                        {
+                          backgroundColor: likedPosts.has(selectedPost.id) 
+                            ? (colorScheme === 'dark' ? '#4a0e0e' : '#FFE8E8')
+                            : themeColors.inputBackground,
+                          borderColor: likedPosts.has(selectedPost.id) 
+                            ? (colorScheme === 'dark' ? '#dc2626' : '#FFB6B6')
+                            : themeColors.inputBorder
+                        }
                       ]}
                       activeOpacity={0.7}
                     >
@@ -753,6 +806,7 @@ export default function BoardScreen() {
                       </Text>
                       <Text style={[
                         styles.actionButtonText,
+                        { color: themeColors.text },
                         likedPosts.has(selectedPost.id) && styles.likeActionButtonTextActive
                       ]}>
                         좋아요
@@ -761,10 +815,18 @@ export default function BoardScreen() {
                   </View>
                   
                   {/* 댓글 작성 */}
-                  <View style={styles.commentInputContainer}>
+                  <View style={[styles.commentInputContainer, { backgroundColor: themeColors.modalBackground }]}>
                     <TextInput
-                      style={styles.commentInput}
+                      style={[
+                        styles.commentInput,
+                        { 
+                          backgroundColor: themeColors.inputBackground,
+                          borderColor: themeColors.inputBorder,
+                          color: themeColors.text
+                        }
+                      ]}
                       placeholder="댓글을 입력하세요..."
+                      placeholderTextColor={themeColors.secondaryText}
                       value={newComment}
                       onChangeText={setNewComment}
                       multiline
@@ -772,14 +834,14 @@ export default function BoardScreen() {
                     <TouchableOpacity
                       style={[
                         styles.commentSubmitButton,
-                        !newComment.trim() && styles.commentSubmitButtonDisabled
+                        !newComment.trim() && { backgroundColor: themeColors.border }
                       ]}
                       onPress={createComment}
                       disabled={!newComment.trim()}
                     >
                       <Text style={[
                         styles.commentSubmitText,
-                        !newComment.trim() && styles.commentSubmitDisabled
+                        !newComment.trim() && { color: themeColors.secondaryText }
                       ]}>
                         등록
                       </Text>
@@ -788,24 +850,24 @@ export default function BoardScreen() {
 
                                      {/* 댓글 목록 */}
                    {comments.map((comment) => (
-                     <View key={comment.id} style={styles.commentItem}>
+                     <View key={comment.id} style={[styles.commentItem, { backgroundColor: themeColors.cardBackground }]}>
                        <View style={styles.commentHeader}>
-                         <Text style={styles.commentAuthor}>{comment.author_name}</Text>
+                         <Text style={[styles.commentAuthor, { color: themeColors.text }]}>{comment.author_name}</Text>
                          <View style={styles.commentActions}>
-                           <Text style={styles.commentDate}>
+                           <Text style={[styles.commentDate, { color: themeColors.secondaryText }]}>
                              {new Date(comment.created_at).toLocaleString('ko-KR')}
                            </Text>
                            {user?.id === comment.author_id && (
                              <TouchableOpacity
                                onPress={() => deleteComment(comment.id, comment.author_id)}
-                               style={styles.commentDeleteButton}
+                               style={[styles.commentDeleteButton, { backgroundColor: themeColors.likeActive }]}
                              >
                                <Text style={styles.commentDeleteText}>삭제</Text>
                              </TouchableOpacity>
                            )}
                          </View>
                        </View>
-                       <Text style={styles.commentContent}>{comment.content}</Text>
+                       <Text style={[styles.commentContent, { color: themeColors.text }]}>{comment.content}</Text>
                        <View style={styles.commentFooter}>
                          <TouchableOpacity
                            onPress={() => toggleCommentLike(comment.id)}
@@ -814,7 +876,8 @@ export default function BoardScreen() {
                          >
                            <Text style={[
                              styles.commentLikeCount,
-                             likedComments.has(comment.id) && styles.commentLikeCountActive
+                             { color: themeColors.secondaryText },
+                             likedComments.has(comment.id) && { color: themeColors.likeActive, fontWeight: '600' }
                            ]}>
                              {likedComments.has(comment.id) ? '❤️' : '🤍'} {comment.like_count}
                            </Text>
@@ -824,7 +887,7 @@ export default function BoardScreen() {
                    ))}
 
                   {comments.length === 0 && (
-                    <Text style={styles.noComments}>첫 번째 댓글을 작성해보세요!</Text>
+                    <Text style={[styles.noComments, { color: themeColors.secondaryText }]}>첫 번째 댓글을 작성해보세요!</Text>
                   )}
                 </View>
               </View>

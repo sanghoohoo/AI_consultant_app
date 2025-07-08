@@ -12,12 +12,30 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../contexts/AuthContext';
+import { useColorScheme } from '../../components/useColorScheme';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { signInWithGoogle, signInWithKakao } = useAuth();
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#ffffff',
+    text: colorScheme === 'dark' ? '#ffffff' : '#333',
+    secondaryText: colorScheme === 'dark' ? '#cccccc' : '#666666',
+    labelText: colorScheme === 'dark' ? '#cccccc' : '#4a4a4a',
+    inputBackground: colorScheme === 'dark' ? '#2d2d2d' : '#f5f5f5',
+    inputText: colorScheme === 'dark' ? '#ffffff' : '#1a1a1a',
+    dividerLine: colorScheme === 'dark' ? '#444444' : '#e0e0e0',
+    registerButtonBorder: colorScheme === 'dark' ? '#ffffff' : '#007AFF',
+    registerButtonText: colorScheme === 'dark' ? '#ffffff' : '#007AFF',
+    placeholderText: colorScheme === 'dark' ? '#888888' : '#999999',
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -40,12 +58,36 @@ export default function Login() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithGoogle();
+      router.replace('/(tabs)/main');
+    } catch (error) {
+      Alert.alert('Google 로그인 실패', '로그인 중 문제가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKakaoLogin = async () => {
+    setIsLoading(true);
+    try {
+      await signInWithKakao();
+      router.replace('/(tabs)/main');
+    } catch (error) {
+      Alert.alert('카카오 로그인 실패', '로그인 중 문제가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const goToRegister = () => {
     router.push('/(auth)/Register');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
@@ -53,14 +95,16 @@ export default function Login() {
         <View style={styles.contentContainer}>
           {/* EDVISOR 로고 텍스트 */}
           <Text style={styles.logoText}>EDVISOR</Text>
+          <Text style={[styles.subtitleText, { color: themeColors.text }]}>당신의 교육 여정을 위한 AI기반 교육 상담사</Text>
 
           {/* 입력 폼 영역 */}
           <View style={styles.formContainer}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>이메일</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>이메일</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: themeColors.inputBackground, color: themeColors.inputText }]}
                 placeholder="이메일을 입력하세요"
+                placeholderTextColor={themeColors.placeholderText}
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -70,10 +114,11 @@ export default function Login() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>비밀번호</Text>
+              <Text style={[styles.label, { color: themeColors.labelText }]}>비밀번호</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: themeColors.inputBackground, color: themeColors.inputText }]}
                 placeholder="비밀번호를 입력하세요"
+                placeholderTextColor={themeColors.placeholderText}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -92,17 +137,46 @@ export default function Login() {
             </TouchableOpacity>
 
             <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>또는</Text>
-              <View style={styles.dividerLine} />
+              <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
+              <Text style={[styles.dividerText, { color: themeColors.secondaryText }]}>또는</Text>
+              <View style={[styles.dividerLine, { backgroundColor: themeColors.dividerLine }]} />
             </View>
 
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[
+                styles.registerButton, 
+                { 
+                  borderColor: themeColors.registerButtonBorder,
+                  backgroundColor: themeColors.background
+                }
+              ]}
               onPress={goToRegister}
             >
-              <Text style={styles.registerButtonText}>회원가입</Text>
+              <Text style={[styles.registerButtonText, { color: themeColors.registerButtonText }]}>회원가입</Text>
             </TouchableOpacity>
+
+            {/* 소셜 로그인 섹션 - 임시 비활성화 */}
+            {false && (
+            <View style={styles.socialSection}>
+              <Text style={styles.socialTitle}>소셜 계정으로 로그인</Text>
+              
+              <TouchableOpacity
+                style={[styles.socialButton, styles.googleButton]}
+                onPress={handleGoogleLogin}
+                disabled={isLoading}
+              >
+                <Text style={styles.socialButtonText}>🔍 Google로 로그인</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.socialButton, styles.kakaoButton]}
+                onPress={handleKakaoLogin}
+                disabled={isLoading}
+              >
+                <Text style={[styles.socialButtonText, styles.kakaoButtonText]}>💬 카카오로 로그인</Text>
+              </TouchableOpacity>
+            </View>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -128,7 +202,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007AFF',
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  subtitleText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    textAlign: 'center',
     marginBottom: 48,
+    lineHeight: 24,
   },
   formContainer: {
     width: '100%',
@@ -191,5 +273,37 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  socialSection: {
+    marginTop: 32,
+    alignItems: 'center',
+  },
+  socialTitle: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 16,
+  },
+  socialButton: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+    width: '100%',
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+  },
+  kakaoButton: {
+    backgroundColor: '#FEE500',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333333',
+  },
+  kakaoButtonText: {
+    color: '#3C1E1E',
   },
 }); 

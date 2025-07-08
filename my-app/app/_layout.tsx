@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Linking } from 'react-native';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { supabase } from '../lib/supabaseClient';
@@ -18,7 +18,6 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: undefined, // 조건부 라우팅 사용
 };
 
@@ -74,8 +73,40 @@ export default function RootLayout() {
       setAuthLoading(false);
     });
 
+    // Deep Link 처리 (OAuth 콜백)
+    const handleDeepLink = (url: string) => {
+      console.log('[인증] Deep Link 받음:', url);
+      if (url.includes('#access_token=') || url.includes('?access_token=')) {
+        // OAuth 콜백 처리
+        const urlParams = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+        const accessToken = urlParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          console.log('[인증] OAuth 토큰 설정 중...');
+          supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+      }
+    };
+
+    // URL 이벤트 리스너 추가
+    const linkingListener = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    // 앱이 닫힌 상태에서 URL로 열린 경우 처리
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink(url);
+      }
+    });
+
     return () => {
       listener?.subscription.unsubscribe();
+      linkingListener.remove();
     };
   }, []);
 
@@ -113,7 +144,6 @@ function RootLayoutNav({ isLoggedIn }: { isLoggedIn: boolean }) {
           ) : (
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           )}
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </SafeAreaProvider>

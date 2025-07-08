@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, Alert, Pressable } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Swipeable } from 'react-native-gesture-handler';
 import { supabase } from '../lib/supabaseClient';
+import { useColorScheme } from './useColorScheme';
 
 interface ChatSessionListProps {
   userId: string;
@@ -17,6 +18,20 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
   const [sessions, setSessions] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#f8f9fa',
+    cardBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    headerBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    borderColor: colorScheme === 'dark' ? '#444' : '#e9ecef',
+    text: colorScheme === 'dark' ? '#fff' : '#333',
+    secondaryText: colorScheme === 'dark' ? '#ccc' : '#666',
+    emptyText: colorScheme === 'dark' ? '#999' : '#999',
+    selectedItemBackground: colorScheme === 'dark' ? '#1e3a8a' : '#e3f2fd',
+    selectedItemBorder: colorScheme === 'dark' ? '#3b82f6' : '#2196f3',
+  };
 
   // 세션 삭제 함수
   const deleteSession = async (sessionId: string) => {
@@ -204,7 +219,12 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
       <Pressable
         style={({ pressed }) => [
           styles.sessionItem,
-          selectedId === item.id && styles.selectedItem,
+          { backgroundColor: themeColors.cardBackground },
+          selectedId === item.id && { 
+            backgroundColor: themeColors.selectedItemBackground,
+            borderWidth: 2,
+            borderColor: themeColors.selectedItemBorder
+          },
           pressed && styles.pressedItem,
         ]}
         onPress={() => {
@@ -213,10 +233,10 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
         }}
       >
         <View style={styles.sessionContent}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>
+          <Text style={[styles.sessionTitle, { color: themeColors.text }]} numberOfLines={1}>
             {item.summary || item.title || '새 대화'}
           </Text>
-          <Text style={styles.sessionDate}>
+          <Text style={[styles.sessionDate, { color: themeColors.secondaryText }]}>
             {formatDate(item.created_at)}
           </Text>
         </View>
@@ -225,9 +245,9 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>대화 기록</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <View style={[styles.header, { backgroundColor: themeColors.headerBackground, borderBottomColor: themeColors.borderColor }]}>
+        <Text style={[styles.headerTitle, { color: themeColors.text }]}>대화 기록</Text>
         <TouchableOpacity style={styles.newChatButton} onPress={onNewSession}>
           <Text style={styles.newChatButtonText}>+ 새 대화</Text>
         </TouchableOpacity>
@@ -235,7 +255,7 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
 
       {sessions.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>대화 기록이 없습니다</Text>
+          <Text style={[styles.emptyText, { color: themeColors.emptyText }]}>대화 기록이 없습니다</Text>
         </View>
       ) : (
       <FlatList

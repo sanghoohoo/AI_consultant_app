@@ -16,6 +16,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../../lib/supabaseClient';
 import ChatSessionList from '../../components/ChatSessionList';
+import { useColorScheme } from '../../components/useColorScheme';
 
 const Drawer = createDrawerNavigator();
 
@@ -41,7 +42,7 @@ const MarkdownRenderer = ({ content, style }: { content: string; style?: any }) 
         
         elements.push(
           <View key={key++} style={{
-            backgroundColor: '#f6f8fa',
+            backgroundColor: style?.codeBackground || '#f6f8fa',
             borderRadius: 6,
             padding: 12,
             marginVertical: 4,
@@ -49,7 +50,7 @@ const MarkdownRenderer = ({ content, style }: { content: string; style?: any }) 
             <Text style={{
               fontFamily: 'monospace',
               fontSize: 14,
-              color: style?.color || '#333',
+              color: style?.codeText || style?.color || '#333',
             }}>
               {codeLines.join('\n')}
             </Text>
@@ -271,6 +272,12 @@ function CustomDrawerContent({
 }: CustomDrawerContentProps) {
   const drawerStatus = useDrawerStatus();
   const isDrawerOpen = drawerStatus === 'open';
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+  };
 
   // 세션 삭제 핸들러
   const handleDeleteSession = (deletedSessionId: string) => {
@@ -284,7 +291,7 @@ function CustomDrawerContent({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       <ChatSessionList
         userId={userId ?? ''}
         selectedId={selectedSessionId}
@@ -294,52 +301,54 @@ function CustomDrawerContent({
         }}
         onDelete={handleDeleteSession}
         drawerOpen={isDrawerOpen}
-        onNewSession={async () => {
-          try {
-            console.log('새 세션 생성 시작... userId:', userId);
-            const { data, error } = await supabase
-              .from('chat_sessions')
-              .insert([{ user_id: userId ?? '' }])
-              .select()
-              .single();
-              
-            if (error) {
-              console.error('새 세션 생성 오류:', error);
-              return;
-            }
-            
-            if (data) {
-              console.log('새 세션 생성 성공:', data.id);
-              setSelectedSessionId(data.id);
-              navigation.closeDrawer();
-              
-              // 새 세션이 생성되었음을 로그에 남김
-              console.log('새 세션 데이터:', {
-                id: data.id,
-                user_id: data.user_id,
-                created_at: data.created_at,
-                updated_at: data.updated_at
-              });
-            }
-          } catch (error) {
-            console.error('새 세션 생성 예외:', error);
-          }
+        onNewSession={() => {
+          console.log('새 대화 시작 - 빈 채팅창 표시');
+          // 세션을 즉시 생성하지 않고 빈 채팅창만 표시
+          setSelectedSessionId(null);
+          navigation.closeDrawer();
         }}
       />
     </View>
   );
 }
 
-function ChatScreen({ sessionId }: { sessionId: string | null }) {
+function ChatScreen({ 
+  sessionId, 
+  userId, 
+  setSelectedSessionId 
+}: { 
+  sessionId: string | null;
+  userId: string;
+  setSelectedSessionId: (id: string) => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [botStreaming, setBotStreaming] = useState(false);
   const [streamedBotMessage, setStreamedBotMessage] = useState("");
   const [userProfile, setUserProfile] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+    cardBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    text: colorScheme === 'dark' ? '#fff' : '#333',
+    secondaryText: colorScheme === 'dark' ? '#ccc' : '#666',
+    inputBackground: colorScheme === 'dark' ? '#3d3d3d' : '#fff',
+    inputBorder: colorScheme === 'dark' ? '#555' : '#ddd',
+    border: colorScheme === 'dark' ? '#444' : '#eee',
+    userMessageBg: '#007AFF',
+    aiMessageBg: colorScheme === 'dark' ? '#3d3d3d' : '#E5E5E7',
+    aiMessageText: colorScheme === 'dark' ? '#fff' : '#000',
+    codeBackground: colorScheme === 'dark' ? '#2d2d2d' : '#f6f8fa',
+    codeText: colorScheme === 'dark' ? '#e6db74' : '#d73a49',
+    quoteBorder: colorScheme === 'dark' ? '#555' : '#dfe2e5',
+    featureCardBg: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
+    loadingBg: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+  };
 
   // 사용자 프로필 로드
   useEffect(() => {
@@ -487,13 +496,49 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
   };
 
   // WebSocket을 통한 스트리밍 메시지 전송 (웹 버전과 동일)
-  const sendStreamingMessage = () => {
-    if (!inputText.trim() || !sessionId || isLoading) return;
+  const sendStreamingMessage = async () => {
+    if (!inputText.trim() || botStreaming) return;
 
     const userMessage = inputText.trim();
+    setInputText('');
+    setBotStreaming(true);
+    setStreamedBotMessage("");
+
+    let currentSessionId = sessionId;
+
+    // 세션이 없으면 새로 생성
+    if (!currentSessionId) {
+      try {
+        console.log('새 세션 생성 중...');
+        const { data: newSession, error: createError } = await supabase
+          .from('chat_sessions')
+          .insert([{ user_id: userId }])
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('새 세션 생성 오류:', createError);
+          setBotStreaming(false);
+          Alert.alert('오류', '세션 생성에 실패했습니다.');
+          return;
+        }
+        
+        if (newSession) {
+          console.log('새 세션 생성됨:', newSession.id);
+          currentSessionId = newSession.id;
+          setSelectedSessionId(newSession.id);
+        }
+      } catch (error) {
+        console.error('세션 생성 예외:', error);
+        setBotStreaming(false);
+        Alert.alert('오류', '세션 생성 중 문제가 발생했습니다.');
+        return;
+      }
+    }
+
     const userMsg: Message = {
       id: Date.now().toString(),
-      session_id: sessionId,
+      session_id: currentSessionId!,
       content: userMessage,
       sender: 'user',
       created_at: new Date().toISOString(),
@@ -502,15 +547,12 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
 
     // 사용자 메시지를 즉시 표시
     setMessages(prev => [...prev, userMsg]);
-    setInputText('');
-    setBotStreaming(true);
-    setStreamedBotMessage("");
 
     // 사용자 메시지를 DB에 저장
-    supabase
+            supabase
       .from('chat_messages')
       .insert([{
-        session_id: sessionId,
+        session_id: currentSessionId!,
         content: userMessage,
         sender: 'user'
       }])
@@ -526,7 +568,7 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           wsRef.current.onopen = () => {
             console.log('WebSocket 연결 성공:', WS_URL);
             const payload = {
-              sessionId: sessionId,
+              sessionId: currentSessionId,
               messages: [...messages.slice(-10), userMsg].map(msg => ({
                 id: msg.id,
                 content: msg.content,
@@ -571,14 +613,14 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
             // 웹 버전과 동일하게 최종 메시지 처리
             const botMessage: Message = {
               id: (Date.now() + 1).toString(),
-              session_id: sessionId,
+              session_id: currentSessionId!,
               content: botText || 'AI 응답이 없습니다.',
               sender: 'assistant',
               created_at: new Date().toISOString(),
             };
             
             await supabase.from('chat_messages').insert([{
-              session_id: sessionId,
+              session_id: currentSessionId!,
               content: botMessage.content,
               sender: 'assistant'
             }]);
@@ -588,7 +630,7 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
             
             // 세션 요약 실행
             const updatedMessages = [...messages, userMsg, botMessage];
-            summarizeSession(sessionId, updatedMessages);
+            summarizeSession(currentSessionId!, updatedMessages);
           };
 
         } catch (error) {
@@ -597,7 +639,7 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           // 오류 시 fallback 응답
           const fallbackMessage: Message = {
             id: (Date.now() + 1).toString(),
-            session_id: sessionId,
+            session_id: currentSessionId!,
             content: '죄송합니다. 현재 AI 서비스에 연결할 수 없습니다. 네트워크를 확인하고 잠시 후 다시 시도해주세요.',
             sender: 'assistant',
             created_at: new Date().toISOString(),
@@ -605,7 +647,7 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
           
           setMessages(prev => [...prev, fallbackMessage]);
           await supabase.from('chat_messages').insert([{
-            session_id: sessionId,
+            session_id: currentSessionId!,
             content: fallbackMessage.content,
             sender: 'assistant'
           }]);
@@ -626,7 +668,9 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
       <View
         style={[
           styles.messageBubble,
-          item.sender === 'user' ? styles.userMessage : styles.aiMessage
+          item.sender === 'user' 
+            ? { ...styles.userMessage, backgroundColor: themeColors.userMessageBg }
+            : { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }
         ]}
       >
         {item.sender === 'user' ? (
@@ -639,7 +683,12 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
         ) : (
           <MarkdownRenderer 
             content={item.content}
-            style={styles.aiMessageText}
+            style={{
+              ...styles.aiMessageText,
+              color: themeColors.aiMessageText,
+              codeBackground: themeColors.codeBackground,
+              codeText: themeColors.codeText,
+            }}
           />
         )}
       </View>
@@ -655,18 +704,10 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
     };
   }, []);
 
-  if (!sessionId) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          왼쪽 메뉴에서 채팅 세션을 선택하거나{'\n'}새 대화를 시작하세요.
-        </Text>
-      </View>
-    );
-  }
+  // sessionId가 없어도 빈 채팅창을 표시
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -681,17 +722,54 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
         style={styles.messagesContainer}
         contentContainerStyle={[
           styles.messagesContent,
-          Platform.OS === 'android' && keyboardHeight > 0 && { paddingBottom: 20 }
+          Platform.OS === 'android' && keyboardHeight > 0 && { paddingBottom: 20 },
+          messages.length === 0 && !botStreaming && styles.emptyMessagesContent
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        ListEmptyComponent={() => (
+          !botStreaming ? (
+            <View style={styles.welcomeContainer}>
+              <View style={styles.featuresContainer}>
+                <View style={[styles.featureCard, { backgroundColor: themeColors.featureCardBg }]}>
+                  <Text style={styles.featureIcon}>🤖</Text>
+                  <Text style={[styles.featureTitle, { color: themeColors.text }]}>AI 기반 상담</Text>
+                  <Text style={[styles.featureDescription, { color: themeColors.secondaryText }]}>
+                    최신 AI 기술을 활용한{'\n'}맞춤형 교육 상담 서비스를 제공합니다.
+                  </Text>
+                </View>
+                
+                <View style={[styles.featureCard, { backgroundColor: themeColors.featureCardBg }]}>
+                  <Text style={styles.featureIcon}>💡</Text>
+                  <Text style={[styles.featureTitle, { color: themeColors.text }]}>스마트 학습 가이드</Text>
+                  <Text style={[styles.featureDescription, { color: themeColors.secondaryText }]}>
+                    개인별 학습 스타일과 목표에 맞는{'\n'}최적의 학습 경로를 제안합니다.
+                  </Text>
+                </View>
+                
+                <View style={[styles.featureCard, { backgroundColor: themeColors.featureCardBg }]}>
+                  <Text style={styles.featureIcon}>🎓</Text>
+                  <Text style={[styles.featureTitle, { color: themeColors.text }]}>전문 교육 상담</Text>
+                  <Text style={[styles.featureDescription, { color: themeColors.secondaryText }]}>
+                    교육 전문가 수준의 상세한{'\n'}학습 상담과 조언을 제공합니다.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null
+        )}
         ListFooterComponent={() => (
           botStreaming ? (
             <View style={[styles.messageWrapper, styles.aiMessageWrapper]}>
-              <View style={[styles.messageBubble, styles.aiMessage]}>
+              <View style={[styles.messageBubble, { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }]}>
                 <MarkdownRenderer 
                   content={streamedBotMessage || 'AI가 응답을 생성중입니다...'}
-                  style={styles.aiMessageText}
+                  style={{
+                    ...styles.aiMessageText,
+                    color: themeColors.aiMessageText,
+                    codeBackground: themeColors.codeBackground,
+                    codeText: themeColors.codeText,
+                  }}
                 />
               </View>
             </View>
@@ -699,21 +777,30 @@ function ChatScreen({ sessionId }: { sessionId: string | null }) {
         )}
       />
 
-      {/* 로딩 표시는 스트리밍으로 대체 */}
+
 
       {/* 입력창 */}
       <View style={[
         styles.inputContainer,
+        { backgroundColor: themeColors.cardBackground, borderTopColor: themeColors.border },
         Platform.OS === 'android' && keyboardHeight > 0 && { marginBottom: keyboardHeight - 50 }
       ]}>
         <TextInput
-          style={styles.textInput}
+          style={[
+            styles.textInput,
+            { 
+              backgroundColor: themeColors.inputBackground,
+              borderColor: themeColors.inputBorder,
+              color: themeColors.text
+            }
+          ]}
           value={inputText}
           onChangeText={setInputText}
           placeholder="메시지를 입력하세요..."
+          placeholderTextColor={themeColors.secondaryText}
           multiline
           maxLength={1000}
-          editable={!isLoading}
+          editable={!botStreaming}
           onSubmitEditing={sendStreamingMessage}
           returnKeyType="send"
         />
@@ -734,6 +821,13 @@ export default function Main() {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const colorScheme = useColorScheme();
+
+  // 다크모드 대응 색상 정의
+  const themeColors = {
+    loadingBg: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+    loadingText: colorScheme === 'dark' ? '#ccc' : '#666',
+  };
 
   useEffect(() => {
     const initializeUser = async () => {
@@ -759,58 +853,14 @@ export default function Main() {
     initializeUser();
   }, []);
 
-  // 처음 진입 시 자동으로 새 세션 생성
-  useEffect(() => {
-    const loadOrCreateSession = async () => {
-      if (!userId || selectedSessionId) return;
-      
-      try {
-        console.log('세션 로딩 중... userId:', userId);
-        
-        // 기존 세션 확인
-        const { data: existingSessions, error: fetchError } = await supabase
-          .from('chat_sessions')
-          .select('id')
-          .eq('user_id', userId)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-
-        if (fetchError) {
-          console.error('세션 로딩 오류:', fetchError);
-          return;
-        }
-
-        if (existingSessions && existingSessions.length > 0) {
-          console.log('기존 세션 발견:', existingSessions[0].id);
-          setSelectedSessionId(existingSessions[0].id);
-        } else {
-          console.log('새 세션 생성 중...');
-          const { data: newSession, error: createError } = await supabase
-            .from('chat_sessions')
-            .insert([{ user_id: userId }])
-            .select()
-            .single();
-          
-          if (createError) {
-            console.error('새 세션 생성 오류:', createError);
-          } else if (newSession) {
-            console.log('새 세션 생성됨:', newSession.id);
-            setSelectedSessionId(newSession.id);
-          }
-        }
-      } catch (error) {
-        console.error('세션 초기화 오류:', error);
-      }
-    };
-
-    loadOrCreateSession();
-  }, [userId, selectedSessionId]);
+  // 처음 진입 시에는 세션을 자동으로 생성하지 않음
+  // 사용자가 첫 메시지를 입력할 때 세션이 생성됨
 
   // 로딩 중일 때 로딩 화면 표시
   if (isLoading) {
     return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>앱을 초기화하는 중...</Text>
+      <View style={[styles.loadingScreen, { backgroundColor: themeColors.loadingBg }]}>
+        <Text style={[styles.loadingText, { color: themeColors.loadingText }]}>앱을 초기화하는 중...</Text>
       </View>
     );
   }
@@ -818,8 +868,8 @@ export default function Main() {
   // 사용자가 로그인되지 않은 경우
   if (!userId) {
     return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.loadingText}>로그인이 필요합니다.</Text>
+      <View style={[styles.loadingScreen, { backgroundColor: themeColors.loadingBg }]}>
+        <Text style={[styles.loadingText, { color: themeColors.loadingText }]}>로그인이 필요합니다.</Text>
       </View>
     );
   }
@@ -849,7 +899,13 @@ export default function Main() {
           title: '채팅',
         }}
       >
-        {() => <ChatScreen sessionId={selectedSessionId} />}
+        {() => (
+          <ChatScreen 
+            sessionId={selectedSessionId} 
+            userId={userId}
+            setSelectedSessionId={setSelectedSessionId}
+          />
+        )}
       </Drawer.Screen>
     </Drawer.Navigator>
     </GestureHandlerRootView>
@@ -863,17 +919,6 @@ const styles = StyleSheet.create({
   },
   keyboardAvoidingView: {
     flex: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#666',
   },
   messagesContainer: {
     flex: 1,
@@ -910,10 +955,6 @@ const styles = StyleSheet.create({
   },
   aiMessageText: {
     color: 'black',
-  },
-  loadingContainer: {
-    padding: 16,
-    alignItems: 'center',
   },
   loadingText: {
     color: '#666',
@@ -957,5 +998,53 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  emptyMessagesContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    minHeight: 300,
+  },
+  featuresContainer: {
+    width: '100%',
+    paddingHorizontal: 12,
+  },
+  featureCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  featureIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  featureTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  featureDescription: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 }); 
