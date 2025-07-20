@@ -9,11 +9,11 @@ import {
   TextInput,
   Modal,
   SafeAreaView,
+  Switch,
 } from 'react-native';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '../../components/useColorScheme';
-import Colors from '../../constants/Colors';
 
 interface UserProfile {
   id: string;
@@ -44,8 +44,7 @@ export default function Settings() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectionModalVisible, setSelectionModalVisible] = useState(false);
-  const [inputMode, setInputMode] = useState<'quick' | 'detail' | null>(null);
+  const [isDetailMode, setIsDetailMode] = useState(false); // 상세 입력 모드 토글
   const [isLoading, setIsLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
@@ -66,6 +65,8 @@ export default function Settings() {
     addProfileBackground: colorScheme === 'dark' ? '#1a2a3a' : '#f0f8ff',
     percentileBackground: colorScheme === 'dark' ? '#1a2332' : '#e3f2fd',
     percentileText: colorScheme === 'dark' ? '#64b5f6' : '#1976d2',
+    switchTrack: colorScheme === 'dark' ? '#767577' : '#81b0ff',
+    switchThumb: colorScheme === 'dark' ? '#f4f3f4' : '#f4f3f4',
   };
 
   // 폼 상태
@@ -104,7 +105,6 @@ export default function Settings() {
         setUser(userData.user);
 
         if (userData.user) {
-          // 사용자 프로필 로드
           const { data: profileData, error: profileError } = await supabase
             .from('user_profile')
             .select('*')
@@ -188,7 +188,7 @@ export default function Settings() {
       if (error) throw error;
 
       setUserProfile({ id: user.id, ...formData });
-      closeModal();
+      setModalVisible(false); // 모달 닫기
       Alert.alert('성공', '프로필이 저장되었습니다.');
     } catch (error) {
       console.error('프로필 저장 오류:', error);
@@ -198,22 +198,9 @@ export default function Settings() {
     }
   };
 
-  // 프로필 편집 모달 열기 (선택 모달 먼저)
+  // 프로필 편집 모달 열기
   const openProfileModal = () => {
-    setSelectionModalVisible(true);
-  };
-
-  // 입력 모드 선택 후 해당 모달 열기
-  const handleSelectMode = (mode: 'quick' | 'detail') => {
-    setInputMode(mode);
-    setSelectionModalVisible(false);
     setModalVisible(true);
-  };
-
-  // 모달 닫기
-  const closeModal = () => {
-    setModalVisible(false);
-    setInputMode(null);
   };
 
   // 총 백분위 계산
@@ -317,59 +304,20 @@ export default function Settings() {
       </ScrollView>
 
       {/* 프로필 편집 모달 */}
-      {/* 입력 방식 선택 모달 */}
-      <Modal
-        visible={selectionModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSelectionModalVisible(false)}
-      >
-        <View style={styles.selectionModalOverlay}>
-          <View style={styles.selectionModalContent}>
-            <Text style={styles.selectionModalTitle}>입력 방식 선택</Text>
-            <Text style={styles.selectionModalSubtitle}>어떤 방식으로 정보를 입력하시겠습니까?</Text>
-            
-            <TouchableOpacity 
-              style={styles.selectionButton}
-              onPress={() => handleSelectMode('quick')}
-            >
-              <Text style={styles.selectionButtonTitle}>빠른 입력</Text>
-              <Text style={styles.selectionButtonSubtitle}>기본적인 정보만 간단히 입력</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.selectionButton}
-              onPress={() => handleSelectMode('detail')}
-            >
-              <Text style={styles.selectionButtonTitle}>상세 입력</Text>
-              <Text style={styles.selectionButtonSubtitle}>상세한 정보까지 모두 입력</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.cancelSelectionButton}
-              onPress={() => setSelectionModalVisible(false)}
-            >
-              <Text style={styles.cancelSelectionButtonText}>취소</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 프로필 편집 모달 */}
       <Modal
         visible={modalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={closeModal}
+        onRequestClose={() => setModalVisible(false)}
       >
         <SafeAreaView style={styles.modalContainer}>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={closeModal}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.cancelButton}>취소</Text>
               </TouchableOpacity>
               <Text style={styles.modalTitle}>
-                {inputMode === 'quick' ? '빠른 정보 입력' : '상세 정보 입력'}
+                내 정보 {isDetailMode ? '상세' : '빠른'} 입력
               </Text>
               <TouchableOpacity onPress={handleSaveProfile} disabled={isLoading}>
                 <Text style={[styles.saveButton, isLoading && styles.disabledButton]}>
@@ -378,211 +326,18 @@ export default function Settings() {
               </TouchableOpacity>
             </View>
 
-                          {/* 빠른 입력 모드 */}
-              {inputMode === 'quick' && (
-                <>
-                  {/* 기본 정보 */}
-                  <View style={styles.formSection}>
-                    <Text style={styles.formSectionTitle}>기본 정보</Text>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>이름</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
-                  placeholder="이름을 입력하세요"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>학교명</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.school}
-                  onChangeText={(text) => setFormData({ ...formData, school: text })}
-                  placeholder="학교명을 입력하세요"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>학년</Text>
-                <View style={styles.gradeContainer}>
-                  {['1', '2', '3'].map((grade) => (
-                    <TouchableOpacity
-                      key={grade}
-                      style={[
-                        styles.gradeButton,
-                        formData.grade === grade && styles.gradeButtonActive
-                      ]}
-                      onPress={() => setFormData({ ...formData, grade })}
-                    >
-                      <Text style={[
-                        styles.gradeButtonText,
-                        formData.grade === grade && styles.gradeButtonTextActive
-                      ]}>
-                        {grade}학년
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>내신 등급</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.gpa}
-                  onChangeText={(text) => setFormData({ ...formData, gpa: text })}
-                  placeholder="예: 2.0"
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>희망 전공 계열</Text>
-                <View style={styles.majorContainer}>
-                  {['공학계열', '인문계열', '자연계열', '예체능계열', '기타'].map((major) => (
-                    <TouchableOpacity
-                      key={major}
-                      style={[
-                        styles.majorButton,
-                        formData.major_interest === major && styles.majorButtonActive
-                      ]}
-                      onPress={() => setFormData({ ...formData, major_interest: major })}
-                    >
-                      <Text style={[
-                        styles.majorButtonText,
-                        formData.major_interest === major && styles.majorButtonTextActive
-                      ]}>
-                        {major}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            {/* 수능 정보 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>수능 정보</Text>
-              
-              {/* 국어 */}
-              <View style={styles.suneungRow}>
-                <Text style={styles.suneungSubject}>국어</Text>
-                <View style={styles.suneungInputs}>
-                  <TextInput
-                    style={styles.suneungInput}
-                    value={formData.suneung.korean.grade}
-                    onChangeText={(text) => setFormData({
-                      ...formData,
-                      suneung: {
-                        ...formData.suneung,
-                        korean: { ...formData.suneung.korean, grade: text }
-                      }
-                    })}
-                    placeholder="등급"
-                    keyboardType="numeric"
-                  />
-                  <TextInput
-                    style={styles.suneungInput}
-                    value={formData.suneung.korean.percentile}
-                    onChangeText={(text) => setFormData({
-                      ...formData,
-                      suneung: {
-                        ...formData.suneung,
-                        korean: { ...formData.suneung.korean, percentile: text }
-                      }
-                    })}
-                    placeholder="백분위"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* 수학 */}
-              <View style={styles.suneungRow}>
-                <Text style={styles.suneungSubject}>수학</Text>
-                <View style={styles.suneungInputs}>
-                  <TextInput
-                    style={styles.suneungInput}
-                    value={formData.suneung.math.grade}
-                    onChangeText={(text) => setFormData({
-                      ...formData,
-                      suneung: {
-                        ...formData.suneung,
-                        math: { ...formData.suneung.math, grade: text }
-                      }
-                    })}
-                    placeholder="등급"
-                    keyboardType="numeric"
-                  />
-                  <TextInput
-                    style={styles.suneungInput}
-                    value={formData.suneung.math.percentile}
-                    onChangeText={(text) => setFormData({
-                      ...formData,
-                      suneung: {
-                        ...formData.suneung,
-                        math: { ...formData.suneung.math, percentile: text }
-                      }
-                    })}
-                    placeholder="백분위"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* 영어 */}
-              <View style={styles.suneungRow}>
-                <Text style={styles.suneungSubject}>영어</Text>
-                <View style={styles.suneungInputs}>
-                  <TextInput
-                    style={styles.suneungInput}
-                    value={formData.suneung.english.grade}
-                    onChangeText={(text) => setFormData({
-                      ...formData,
-                      suneung: {
-                        ...formData.suneung,
-                        english: { grade: text }
-                      }
-                    })}
-                    placeholder="등급"
-                    keyboardType="numeric"
-                  />
-                  <View style={[styles.suneungInput, styles.disabledInput]}>
-                    <Text style={styles.disabledText}>-</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* 총 백분위 표시 */}
-              <View style={styles.totalPercentile}>
-                <Text style={styles.totalPercentileText}>
-                  총 백분위: {calculateTotalPercentile().toFixed(1)}
-                </Text>
-              </View>
-            </View>
-
-            {/* 비교과 활동 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>비교과 활동</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.activities}
-                onChangeText={(text) => setFormData({ ...formData, activities: text })}
-                placeholder="동아리, 봉사활동, 수상 경력 등을 입력하세요"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
+            {/* 상세 입력 모드 토글 */}
+            <View style={styles.detailModeToggleContainer}>
+              <Text style={[styles.detailModeToggleText, { color: themeColors.text }]}>상세 정보 입력</Text>
+              <Switch
+                trackColor={{ false: themeColors.switchTrack, true: themeColors.activeButton }}
+                thumbColor={themeColors.switchThumb}
+                ios_backgroundColor={themeColors.switchTrack}
+                onValueChange={setIsDetailMode}
+                value={isDetailMode}
               />
             </View>
-          </>
-        )}
 
-        {/* 상세 입력 모드 */}
-        {inputMode === 'detail' && (
-          <>
             {/* 기본 정보 */}
             <View style={styles.formSection}>
               <Text style={styles.formSectionTitle}>기본 정보</Text>
@@ -594,6 +349,7 @@ export default function Settings() {
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
                   placeholder="이름을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
                 />
               </View>
 
@@ -604,6 +360,7 @@ export default function Settings() {
                   value={formData.school}
                   onChangeText={(text) => setFormData({ ...formData, school: text })}
                   placeholder="학교명을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
                 />
               </View>
 
@@ -638,6 +395,7 @@ export default function Settings() {
                   onChangeText={(text) => setFormData({ ...formData, gpa: text })}
                   placeholder="예: 2.0"
                   keyboardType="numeric"
+                  placeholderTextColor={themeColors.secondaryText}
                 />
               </View>
 
@@ -685,6 +443,7 @@ export default function Settings() {
                     })}
                     placeholder="등급"
                     keyboardType="numeric"
+                    placeholderTextColor={themeColors.secondaryText}
                   />
                   <TextInput
                     style={styles.suneungInput}
@@ -698,6 +457,7 @@ export default function Settings() {
                     })}
                     placeholder="백분위"
                     keyboardType="numeric"
+                    placeholderTextColor={themeColors.secondaryText}
                   />
                 </View>
               </View>
@@ -718,6 +478,7 @@ export default function Settings() {
                     })}
                     placeholder="등급"
                     keyboardType="numeric"
+                    placeholderTextColor={themeColors.secondaryText}
                   />
                   <TextInput
                     style={styles.suneungInput}
@@ -731,6 +492,7 @@ export default function Settings() {
                     })}
                     placeholder="백분위"
                     keyboardType="numeric"
+                    placeholderTextColor={themeColors.secondaryText}
                   />
                 </View>
               </View>
@@ -751,6 +513,7 @@ export default function Settings() {
                     })}
                     placeholder="등급"
                     keyboardType="numeric"
+                    placeholderTextColor={themeColors.secondaryText}
                   />
                   <View style={[styles.suneungInput, styles.disabledInput]}>
                     <Text style={styles.disabledText}>-</Text>
@@ -777,108 +540,119 @@ export default function Settings() {
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
+                placeholderTextColor={themeColors.secondaryText}
               />
             </View>
 
-            {/* 수상 경력 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>수상 경력</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.awards}
-                onChangeText={(text) => setFormData({ ...formData, awards: text })}
-                placeholder="수상 내역을 입력하세요"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+            {/* 상세 입력 모드에서만 보이는 필드 */}
+            {isDetailMode && (
+              <>
+                {/* 수상 경력 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>수상 경력</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.awards}
+                    onChangeText={(text) => setFormData({ ...formData, awards: text })}
+                    placeholder="수상 내역을 입력하세요"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 자격증 및 인증 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>자격증 및 인증</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.certificates}
-                onChangeText={(text) => setFormData({ ...formData, certificates: text })}
-                placeholder="자격증, 인증서 등을 입력하세요"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+                {/* 자격증 및 인증 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>자격증 및 인증</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.certificates}
+                    onChangeText={(text) => setFormData({ ...formData, certificates: text })}
+                    placeholder="자격증, 인증서 등을 입력하세요"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 출결 상황 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>출결 상황</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.attendance}
-                onChangeText={(text) => setFormData({ ...formData, attendance: text })}
-                placeholder="결석, 지각, 조퇴 등의 상황"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+                {/* 출결 상황 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>출결 상황</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.attendance}
+                    onChangeText={(text) => setFormData({ ...formData, attendance: text })}
+                    placeholder="결석, 지각, 조퇴 등의 상황"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 창의적 체험활동 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>창의적 체험활동</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.creative}
-                onChangeText={(text) => setFormData({ ...formData, creative: text })}
-                placeholder="자율, 동아리, 봉사, 진로 활동 등"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
+                {/* 창의적 체험활동 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>창의적 체험활동</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.creative}
+                    onChangeText={(text) => setFormData({ ...formData, creative: text })}
+                    placeholder="자율, 동아리, 봉사, 진로 활동 등"
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 독서활동 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>독서활동</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.reading}
-                onChangeText={(text) => setFormData({ ...formData, reading: text })}
-                placeholder="도서명, 저자, 독서 시기 등"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
+                {/* 독서활동 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>독서활동</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.reading}
+                    onChangeText={(text) => setFormData({ ...formData, reading: text })}
+                    placeholder="도서명, 저자, 독서 시기 등"
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 행동 특성 및 종합의견 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>행동 특성 및 종합의견</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.behavior}
-                onChangeText={(text) => setFormData({ ...formData, behavior: text })}
-                placeholder="자기 평가 및 교사 평가 요약"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
+                {/* 행동 특성 및 종합의견 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>행동 특성 및 종합의견</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.behavior}
+                    onChangeText={(text) => setFormData({ ...formData, behavior: text })}
+                    placeholder="자기 평가 및 교사 평가 요약"
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
 
-            {/* 자기소개서 초안 */}
-            <View style={styles.formSection}>
-              <Text style={styles.formSectionTitle}>자기소개서 초안</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.intro}
-                onChangeText={(text) => setFormData({ ...formData, intro: text })}
-                placeholder="자기소개서 초안을 작성하세요"
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-              />
-            </View>
-          </>
-        )}
+                {/* 자기소개서 초안 */}
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionTitle}>자기소개서 초안</Text>
+                  <TextInput
+                    style={styles.textArea}
+                    value={formData.intro}
+                    onChangeText={(text) => setFormData({ ...formData, intro: text })}
+                    placeholder="자기소개서 초안을 작성하세요"
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                    placeholderTextColor={themeColors.secondaryText}
+                  />
+                </View>
+              </>
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1178,71 +952,22 @@ const createStyles = (themeColors: any) => StyleSheet.create({
     color: themeColors.percentileText,
     textAlign: 'center',
   },
-  
-  // 선택 모달 스타일
-  selectionModalOverlay: {
-    flex: 1,
-    backgroundColor: themeColors.modalOverlay,
-    justifyContent: 'center',
+  detailModeToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-  },
-  selectionModalContent: {
     backgroundColor: themeColors.cardBackground,
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
+    margin: 10,
+    padding: 20,
+    borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  selectionModalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8,
-    color: themeColors.text,
-  },
-  selectionModalSubtitle: {
+  detailModeToggleText: {
     fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 24,
-    color: themeColors.secondaryText,
-    lineHeight: 22,
-  },
-  selectionButton: {
-    backgroundColor: themeColors.selectionButton,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  selectionButtonTitle: {
-    fontSize: 18,
     fontWeight: '600',
-    color: themeColors.text,
-    marginBottom: 4,
   },
-  selectionButtonSubtitle: {
-    fontSize: 14,
-    color: themeColors.secondaryText,
-    lineHeight: 20,
-  },
-  cancelSelectionButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  cancelSelectionButtonText: {
-    fontSize: 16,
-    color: themeColors.secondaryText,
-    fontWeight: '500',
-  },
-}); 
+});

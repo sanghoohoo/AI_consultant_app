@@ -11,243 +11,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Keyboard
+  Keyboard,
+  ActivityIndicator
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../../lib/supabaseClient';
 import ChatSessionList from '../../components/ChatSessionList';
 import { useColorScheme } from '../../components/useColorScheme';
+import MarkdownDisplay from 'react-native-markdown-display';
 
 const Drawer = createDrawerNavigator();
-
-// 간단한 마크다운 렌더링 컴포넌트
-const MarkdownRenderer = ({ content, style }: { content: string; style?: any }) => {
-  const renderMarkdownText = (text: string) => {
-    const elements: React.ReactNode[] = [];
-    const lines = text.split('\n');
-    let key = 0;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // 코드 블록 처리 (```)
-      if (line.trim().startsWith('```')) {
-        const codeLines = [];
-        i++; // 시작 ```를 넘어감
-        
-        while (i < lines.length && !lines[i].trim().startsWith('```')) {
-          codeLines.push(lines[i]);
-          i++;
-        }
-        
-        elements.push(
-          <View key={key++} style={{
-            backgroundColor: style?.codeBackground || '#f6f8fa',
-            borderRadius: 6,
-            padding: 12,
-            marginVertical: 4,
-          }}>
-            <Text style={{
-              fontFamily: 'monospace',
-              fontSize: 14,
-              color: style?.codeText || style?.color || '#333',
-            }}>
-              {codeLines.join('\n')}
-            </Text>
-          </View>
-        );
-        continue;
-      }
-      
-      // 제목 처리
-      if (line.startsWith('# ')) {
-        elements.push(
-          <Text key={key++} style={{
-            fontSize: 24,
-            fontWeight: 'bold',
-            marginVertical: 8,
-            color: style?.color || '#333',
-          }}>
-            {line.replace('# ', '')}
-          </Text>
-        );
-        continue;
-      }
-      
-      if (line.startsWith('## ')) {
-        elements.push(
-          <Text key={key++} style={{
-            fontSize: 20,
-            fontWeight: 'bold',
-            marginVertical: 6,
-            color: style?.color || '#333',
-          }}>
-            {line.replace('## ', '')}
-          </Text>
-        );
-        continue;
-      }
-      
-      if (line.startsWith('### ')) {
-        elements.push(
-          <Text key={key++} style={{
-            fontSize: 18,
-            fontWeight: 'bold',
-            marginVertical: 4,
-            color: style?.color || '#333',
-          }}>
-            {line.replace('### ', '')}
-          </Text>
-        );
-        continue;
-      }
-      
-      // 목록 처리
-      if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-        elements.push(
-          <View key={key++} style={{ flexDirection: 'row', marginVertical: 2 }}>
-            <Text style={{ marginRight: 8, color: style?.color || '#333' }}>•</Text>
-            <Text style={{
-              flex: 1,
-              fontSize: style?.fontSize || 16,
-              color: style?.color || '#333',
-            }}>
-              {renderInlineMarkdown(line.replace(/^[\s]*[-*]\s/, ''))}
-            </Text>
-          </View>
-        );
-        continue;
-      }
-      
-      // 인용구 처리
-      if (line.startsWith('> ')) {
-        elements.push(
-          <View key={key++} style={{
-            backgroundColor: '#f6f8fa',
-            borderLeftWidth: 4,
-            borderLeftColor: '#dfe2e5',
-            paddingLeft: 12,
-            paddingVertical: 8,
-            marginVertical: 4,
-          }}>
-            <Text style={{
-              fontSize: style?.fontSize || 16,
-              color: style?.color || '#333',
-            }}>
-              {renderInlineMarkdown(line.replace('> ', ''))}
-            </Text>
-          </View>
-        );
-        continue;
-      }
-      
-      // 일반 텍스트 (줄바꿈이 아닌 경우만)
-      if (line.trim()) {
-        elements.push(
-          <Text key={key++} style={{
-            fontSize: style?.fontSize || 16,
-            lineHeight: style?.lineHeight || 24,
-            color: style?.color || '#333',
-            marginVertical: 2,
-          }}>
-            {renderInlineMarkdown(line)}
-          </Text>
-        );
-      }
-    }
-
-    return elements;
-  };
-
-  const renderInlineMarkdown = (text: string) => {
-    const parts: React.ReactNode[] = [];
-    let remaining = text;
-    let key = 0;
-
-    // 인라인 코드 처리 `code`
-    const codeRegex = /`([^`]+)`/g;
-    let lastIndex = 0;
-    let match;
-
-    while ((match = codeRegex.exec(text)) !== null) {
-      // 코드 앞의 텍스트
-      if (match.index > lastIndex) {
-        const beforeText = text.slice(lastIndex, match.index);
-        parts.push(...processBoldItalic(beforeText, key));
-      }
-      
-      // 코드
-      parts.push(
-        <Text key={`code-${key++}`} style={{
-          backgroundColor: '#f0f0f0',
-          color: '#d73a49',
-          borderRadius: 3,
-          paddingHorizontal: 4,
-          paddingVertical: 2,
-          fontSize: 14,
-          fontFamily: 'monospace',
-        }}>
-          {match[1]}
-        </Text>
-      );
-      
-      lastIndex = match.index + match[0].length;
-    }
-
-    // 남은 텍스트
-    if (lastIndex < text.length) {
-      const remainingText = text.slice(lastIndex);
-      parts.push(...processBoldItalic(remainingText, key));
-    }
-
-    return parts.length > 0 ? parts : text;
-  };
-
-  const processBoldItalic = (text: string, startKey: number) => {
-    const parts: React.ReactNode[] = [];
-    let key = startKey;
-
-    // **굵은 글씨**와 *기울임* 처리
-    const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)/g;
-    let lastIndex = 0;
-    let match;
-
-    while ((match = regex.exec(text)) !== null) {
-      // 마크다운 앞의 텍스트
-      if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
-      }
-
-      if (match[1]) {
-        // **굵은 글씨**
-        parts.push(
-          <Text key={`bold-${key++}`} style={{ fontWeight: 'bold' }}>
-            {match[2]}
-          </Text>
-        );
-      } else if (match[3]) {
-        // *기울임*
-        parts.push(
-          <Text key={`italic-${key++}`} style={{ fontStyle: 'italic' }}>
-            {match[4]}
-          </Text>
-        );
-      }
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    // 남은 텍스트
-    if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
-    }
-
-    return parts.length > 0 ? parts : [text];
-  };
-
-  return <View>{renderMarkdownText(content)}</View>;
-};
-
 
 interface Message {
   id: string;
@@ -274,18 +47,12 @@ function CustomDrawerContent({
   const isDrawerOpen = drawerStatus === 'open';
   const colorScheme = useColorScheme();
 
-  // 다크모드 대응 색상 정의
   const themeColors = {
     background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
   };
 
-  // 세션 삭제 핸들러
   const handleDeleteSession = (deletedSessionId: string) => {
-    console.log('세션 삭제됨:', deletedSessionId);
-    
-    // 현재 선택된 세션이 삭제된 경우 선택 해제
     if (selectedSessionId === deletedSessionId) {
-      console.log('현재 선택된 세션이 삭제됨, 선택 해제');
       setSelectedSessionId(null);
     }
   };
@@ -302,8 +69,6 @@ function CustomDrawerContent({
         onDelete={handleDeleteSession}
         drawerOpen={isDrawerOpen}
         onNewSession={() => {
-          console.log('새 대화 시작 - 빈 채팅창 표시');
-          // 세션을 즉시 생성하지 않고 빈 채팅창만 표시
           setSelectedSessionId(null);
           navigation.closeDrawer();
         }}
@@ -312,7 +77,7 @@ function CustomDrawerContent({
   );
 }
 
-function ChatScreen({ 
+function ChatScreen({
   sessionId, 
   userId, 
   setSelectedSessionId 
@@ -331,7 +96,6 @@ function ChatScreen({
   const wsRef = useRef<WebSocket | null>(null);
   const colorScheme = useColorScheme();
 
-  // 다크모드 대응 색상 정의
   const themeColors = {
     background: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
     cardBackground: colorScheme === 'dark' ? '#2d2d2d' : '#fff',
@@ -350,7 +114,38 @@ function ChatScreen({
     loadingBg: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
   };
 
-  // 사용자 프로필 로드
+  const markdownStyles = {
+    body: { color: themeColors.aiMessageText, fontSize: 16, lineHeight: 24 },
+    heading1: { color: themeColors.aiMessageText, marginTop: 8, marginBottom: 8, fontSize: 24 },
+    heading2: { color: themeColors.aiMessageText, marginTop: 6, marginBottom: 6, fontSize: 20 },
+    heading3: { color: themeColors.aiMessageText, marginTop: 4, marginBottom: 4, fontSize: 18 },
+    code_block: {
+      backgroundColor: themeColors.codeBackground,
+      color: themeColors.codeText,
+      borderColor: themeColors.border,
+      borderWidth: 1,
+      borderRadius: 6,
+      padding: 12,
+      fontFamily: 'monospace',
+    },
+    fence: {
+        backgroundColor: themeColors.codeBackground,
+        color: themeColors.codeText,
+        borderColor: themeColors.border,
+        borderWidth: 1,
+        borderRadius: 6,
+        padding: 12,
+        fontFamily: 'monospace',
+    },
+    blockquote: {
+      backgroundColor: themeColors.codeBackground,
+      borderLeftColor: themeColors.quoteBorder,
+      borderLeftWidth: 4,
+      paddingLeft: 12,
+      marginLeft: 0,
+    },
+  };
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -364,7 +159,6 @@ function ChatScreen({
           .single();
           
         if (data) {
-          console.log('사용자 프로필 로드됨:', data);
           setUserProfile(data);
         }
       } catch (error) {
@@ -375,7 +169,6 @@ function ChatScreen({
     fetchProfile();
   }, []);
 
-  // 메시지 로드
   const loadMessages = async () => {
     if (!sessionId) {
       setMessages([]);
@@ -396,12 +189,10 @@ function ChatScreen({
     }
   };
 
-  // 세션 변경 시 메시지 로드
   useEffect(() => {
     loadMessages();
   }, [sessionId]);
 
-  // 실시간 메시지 업데이트 구독
   useEffect(() => {
     if (!sessionId) return;
 
@@ -427,11 +218,9 @@ function ChatScreen({
     };
   }, [sessionId]);
 
-  // 키보드 이벤트 처리
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
       setKeyboardHeight(e.endCoordinates.height);
-      // 키보드가 나타나면 스크롤을 맨 아래로
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -447,7 +236,6 @@ function ChatScreen({
     };
   }, []);
 
-  // 새 메시지가 추가되면 스크롤을 맨 아래로
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => {
@@ -456,9 +244,8 @@ function ChatScreen({
     }
   }, [messages]);
 
-  // 세션 요약 함수
   const summarizeSession = async (sessionId: string, messages: Message[]) => {
-    if (messages.length < 1) return; // 메시지가 없으면 요약하지 않음
+    if (messages.length < 1) return;
     
     try {
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
@@ -482,20 +269,16 @@ function ChatScreen({
         const result = await response.json();
         const summary = result.summary;
         
-        // 세션 제목 업데이트
         await supabase
           .from('chat_sessions')
           .update({ summary: summary })
           .eq('id', sessionId);
-          
-        console.log('세션 요약 완료:', summary);
       }
     } catch (error) {
       console.error('세션 요약 오류:', error);
     }
   };
 
-  // WebSocket을 통한 스트리밍 메시지 전송 (웹 버전과 동일)
   const sendStreamingMessage = async () => {
     if (!inputText.trim() || botStreaming) return;
 
@@ -506,10 +289,8 @@ function ChatScreen({
 
     let currentSessionId = sessionId;
 
-    // 세션이 없으면 새로 생성
     if (!currentSessionId) {
       try {
-        console.log('새 세션 생성 중...');
         const { data: newSession, error: createError } = await supabase
           .from('chat_sessions')
           .insert([{ user_id: userId }])
@@ -517,19 +298,16 @@ function ChatScreen({
           .single();
         
         if (createError) {
-          console.error('새 세션 생성 오류:', createError);
           setBotStreaming(false);
           Alert.alert('오류', '세션 생성에 실패했습니다.');
           return;
         }
         
         if (newSession) {
-          console.log('새 세션 생성됨:', newSession.id);
           currentSessionId = newSession.id;
           setSelectedSessionId(newSession.id);
         }
       } catch (error) {
-        console.error('세션 생성 예외:', error);
         setBotStreaming(false);
         Alert.alert('오류', '세션 생성 중 문제가 발생했습니다.');
         return;
@@ -545,11 +323,9 @@ function ChatScreen({
       timestamp: Date.now(),
     };
 
-    // 사용자 메시지를 즉시 표시
     setMessages(prev => [...prev, userMsg]);
 
-    // 사용자 메시지를 DB에 저장
-            supabase
+    supabase
       .from('chat_messages')
       .insert([{
         session_id: currentSessionId!,
@@ -557,7 +333,6 @@ function ChatScreen({
         sender: 'user'
       }])
       .then(async () => {
-        // WebSocket 연결 시도 (웹 버전과 동일)
         const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
         const WS_URL = API_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/chat';
         
@@ -566,7 +341,6 @@ function ChatScreen({
           wsRef.current = new WebSocket(WS_URL);
           
           wsRef.current.onopen = () => {
-            console.log('WebSocket 연결 성공:', WS_URL);
             const payload = {
               sessionId: currentSessionId,
               messages: [...messages.slice(-10), userMsg].map(msg => ({
@@ -575,27 +349,22 @@ function ChatScreen({
                 sender: msg.sender,
                 timestamp: new Date(msg.created_at).getTime()
               })),
-              userId: null, // 나중에 사용자 ID 추가 가능
-              attachments: [], // 첨부파일 기능은 나중에 추가
+              userId: null,
+              attachments: [],
               profile: userProfile,
             };
-            console.log('WebSocket으로 전송할 데이터:', payload);
             wsRef.current?.send(JSON.stringify(payload));
           };
 
           wsRef.current.onmessage = (e) => {
             const data = e.data;
             
-            // 스트리밍 완료 신호 확인 (웹 버전과 동일)
             if (data === "[STREAM_END]") {
-              console.log('스트리밍 완료, 최종 응답:', botText);
-              // 웹 버전처럼 바로 WebSocket 닫기
               wsRef.current?.close();
               return;
             }
             
             botText += data;
-            console.log('스트리밍 데이터 수신:', data);
             setStreamedBotMessage(botText);
           };
 
@@ -607,10 +376,8 @@ function ChatScreen({
           };
 
           wsRef.current.onclose = async () => {
-            console.log('WebSocket 연결 종료');
             setBotStreaming(false);
             
-            // 웹 버전과 동일하게 최종 메시지 처리
             const botMessage: Message = {
               id: (Date.now() + 1).toString(),
               session_id: currentSessionId!,
@@ -628,7 +395,6 @@ function ChatScreen({
             setMessages((prev: Message[]) => [...prev, botMessage]);
             setStreamedBotMessage("");
             
-            // 세션 요약 실행
             const updatedMessages = [...messages, userMsg, botMessage];
             summarizeSession(currentSessionId!, updatedMessages);
           };
@@ -636,7 +402,6 @@ function ChatScreen({
         } catch (error) {
           console.error('WebSocket 연결 오류:', error);
           setBotStreaming(false);
-          // 오류 시 fallback 응답
           const fallbackMessage: Message = {
             id: (Date.now() + 1).toString(),
             session_id: currentSessionId!,
@@ -655,9 +420,6 @@ function ChatScreen({
       });
   };
 
-
-
-  // 메시지 렌더링
   const renderMessage = ({ item }: { item: Message }) => (
     <View
       style={[
@@ -674,28 +436,18 @@ function ChatScreen({
         ]}
       >
         {item.sender === 'user' ? (
-        <Text style={[
-          styles.messageText,
-            styles.userMessageText
-        ]}>
-          {item.content}
-        </Text>
+          <Text style={[styles.messageText, styles.userMessageText]}>
+            {item.content}
+          </Text>
         ) : (
-          <MarkdownRenderer 
-            content={item.content}
-            style={{
-              ...styles.aiMessageText,
-              color: themeColors.aiMessageText,
-              codeBackground: themeColors.codeBackground,
-              codeText: themeColors.codeText,
-            }}
-          />
+          <MarkdownDisplay style={markdownStyles}>
+            {item.content}
+          </MarkdownDisplay>
         )}
       </View>
     </View>
   );
 
-  // 컴포넌트 언마운트 시 WebSocket 정리
   useEffect(() => {
     return () => {
       if (wsRef.current) {
@@ -704,8 +456,6 @@ function ChatScreen({
     };
   }, []);
 
-  // sessionId가 없어도 빈 채팅창을 표시
-
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       <KeyboardAvoidingView 
@@ -713,7 +463,6 @@ function ChatScreen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-      {/* 메시지 목록 */}
       <FlatList
         ref={flatListRef}
         data={[...messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())}
@@ -761,30 +510,26 @@ function ChatScreen({
         ListFooterComponent={() => (
           botStreaming ? (
             <View style={[styles.messageWrapper, styles.aiMessageWrapper]}>
-              <View style={[styles.messageBubble, { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }]}>
-                <MarkdownRenderer 
-                  content={streamedBotMessage || 'AI가 응답을 생성중입니다...'}
-                  style={{
-                    ...styles.aiMessageText,
-                    color: themeColors.aiMessageText,
-                    codeBackground: themeColors.codeBackground,
-                    codeText: themeColors.codeText,
-                  }}
-                />
+              <View style={[styles.messageBubble, { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg, flexDirection: 'row', alignItems: 'center' }]}>
+                {streamedBotMessage.length === 0 && (
+                  <ActivityIndicator size="small" color={themeColors.aiMessageText} style={{ marginRight: 8 }} />
+                )}
+                <MarkdownDisplay style={markdownStyles}>
+                  {streamedBotMessage || 'AI가 응답을 생성중입니다...'}
+                </MarkdownDisplay>
               </View>
             </View>
           ) : null
         )}
       />
 
-
-
-      {/* 입력창 */}
-      <View style={[
-        styles.inputContainer,
-        { backgroundColor: themeColors.cardBackground, borderTopColor: themeColors.border },
-        Platform.OS === 'android' && keyboardHeight > 0 && { marginBottom: keyboardHeight - 50 }
-      ]}>
+      <View 
+        style={[
+          styles.inputContainer,
+          { backgroundColor: themeColors.cardBackground, borderTopColor: themeColors.border },
+          Platform.OS === 'android' && keyboardHeight > 0 && { marginBottom: keyboardHeight - 50 }
+        ]}
+      >
         <TextInput
           style={[
             styles.textInput,
@@ -823,7 +568,6 @@ export default function Main() {
   const [isLoading, setIsLoading] = useState(true);
   const colorScheme = useColorScheme();
 
-  // 다크모드 대응 색상 정의
   const themeColors = {
     loadingBg: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
     loadingText: colorScheme === 'dark' ? '#ccc' : '#666',
@@ -832,18 +576,14 @@ export default function Main() {
   useEffect(() => {
     const initializeUser = async () => {
       try {
-        console.log('사용자 정보 로딩 중...');
         const { data, error } = await supabase.auth.getUser();
         
         if (error) {
-          console.error('사용자 로딩 오류:', error);
           setUserId(null);
         } else {
-          console.log('로딩된 사용자:', data?.user?.id);
           setUserId(data?.user?.id ?? null);
         }
       } catch (error) {
-        console.error('사용자 초기화 오류:', error);
         setUserId(null);
       } finally {
         setIsLoading(false);
@@ -853,10 +593,6 @@ export default function Main() {
     initializeUser();
   }, []);
 
-  // 처음 진입 시에는 세션을 자동으로 생성하지 않음
-  // 사용자가 첫 메시지를 입력할 때 세션이 생성됨
-
-  // 로딩 중일 때 로딩 화면 표시
   if (isLoading) {
     return (
       <View style={[styles.loadingScreen, { backgroundColor: themeColors.loadingBg }]}>
@@ -865,7 +601,6 @@ export default function Main() {
     );
   }
 
-  // 사용자가 로그인되지 않은 경우
   if (!userId) {
     return (
       <View style={[styles.loadingScreen, { backgroundColor: themeColors.loadingBg }]}>
@@ -1047,4 +782,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-}); 
+});
