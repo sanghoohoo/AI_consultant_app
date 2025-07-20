@@ -62,21 +62,50 @@ export const createCommentAPI = async (comment: Omit<Comment, 'id' | 'created_at
 
 // 게시글 또는 댓글 좋아요 토글
 export const toggleLikeAPI = async (userId: string, postId?: string, commentId?: string) => {
-  const existingLike = await supabase
-    .from('board_likes')
-    .select('id')
-    .eq('user_id', userId)
-    .or(`post_id.eq.${postId},comment_id.eq.${commentId}`)
-    .single();
+  if (postId) {
+    const { data: existingLike, error: fetchError } = await supabase
+      .from('board_likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('post_id', postId)
+      .single();
 
-  if (existingLike.data) {
-    // 좋아요 취소
-    const { error } = await supabase.from('board_likes').delete().eq('id', existingLike.data.id);
-    if (error) throw error;
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
+      throw fetchError;
+    }
+
+    if (existingLike) {
+      // 좋아요 취소
+      const { error } = await supabase.from('board_likes').delete().eq('id', existingLike.id);
+      if (error) throw error;
+    } else {
+      // 좋아요 추가
+      const { error } = await supabase.from('board_likes').insert({ user_id: userId, post_id: postId });
+      if (error) throw error;
+    }
+  } else if (commentId) {
+    const { data: existingLike, error: fetchError } = await supabase
+      .from('board_likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('comment_id', commentId)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
+      throw fetchError;
+    }
+
+    if (existingLike) {
+      // 좋아요 취소
+      const { error } = await supabase.from('board_likes').delete().eq('id', existingLike.id);
+      if (error) throw error;
+    } else {
+      // 좋아요 추가
+      const { error } = await supabase.from('board_likes').insert({ user_id: userId, comment_id: commentId });
+      if (error) throw error;
+    }
   } else {
-    // 좋아요 추가
-    const { error } = await supabase.from('board_likes').insert({ user_id: userId, post_id: postId, comment_id: commentId });
-    if (error) throw error;
+    throw new Error('postId or commentId must be provided.');
   }
 };
 
