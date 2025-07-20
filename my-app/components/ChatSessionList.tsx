@@ -225,7 +225,7 @@ export default function ChatSessionList({ userId, selectedId, onSelect, onNewSes
             borderWidth: 2,
             borderColor: themeColors.selectedItemBorder
           },
-          pressed && styles.pressedItem,
+          
         ]}
         onPress={() => {
           closeAllSwipeables();
