@@ -22,6 +22,8 @@ interface UserProfile {
   grade?: string;
   gpa?: string;
   major_interest?: string;
+  hope_university?: string; // 희망대학 추가
+  hope_major?: string; // 희망학과 추가
   activities?: string;
   awards?: string;
   certificates?: string;
@@ -76,6 +78,8 @@ export default function Settings() {
     grade: '',
     gpa: '',
     major_interest: '',
+    hope_university: '', // 희망대학 추가
+    hope_major: '', // 희망학과 추가
     activities: '',
     awards: '',
     certificates: '',
@@ -119,6 +123,8 @@ export default function Settings() {
               grade: profileData.grade || '',
               gpa: profileData.gpa || '',
               major_interest: profileData.major_interest || '',
+              hope_university: profileData.hope_university || '', // 희망대학 추가
+              hope_major: profileData.hope_major || '', // 희망학과 추가
               activities: profileData.activities || '',
               awards: profileData.awards || '',
               certificates: profileData.certificates || '',
@@ -287,6 +293,14 @@ export default function Settings() {
                 <Text style={styles.profileLabel}>희망 전공:</Text>
                 <Text style={styles.profileValue}>{userProfile.major_interest || '미입력'}</Text>
               </View>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>희망 대학:</Text>
+                <Text style={styles.profileValue}>{userProfile.hope_university || '미입력'}</Text>
+              </View>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>희망 학과:</Text>
+                <Text style={styles.profileValue}>{userProfile.hope_major || '미입력'}</Text>
+              </View>
             </View>
           ) : (
             <TouchableOpacity style={styles.addProfileButton} onPress={openProfileModal}>
@@ -420,6 +434,28 @@ export default function Settings() {
                     </TouchableOpacity>
                   ))}
                 </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>희망 대학</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={formData.hope_university}
+                  onChangeText={(text) => setFormData({ ...formData, hope_university: text })}
+                  placeholder="희망 대학명을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>희망 학과</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={formData.hope_major}
+                  onChangeText={(text) => setFormData({ ...formData, hope_major: text })}
+                  placeholder="희망 학과명을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
+                />
               </View>
             </View>
 
