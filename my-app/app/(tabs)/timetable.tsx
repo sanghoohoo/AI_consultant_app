@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -11,9 +12,11 @@ import {
   SafeAreaView,
   Dimensions,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { getTimetable, saveTimetable } from '../../api/timetable';
+import { searchSubjects, Subject } from '../../api/subjects';
 import { Course } from '../../types/timetable';
 import { useColorScheme } from '../../components/useColorScheme';
 
@@ -61,6 +64,8 @@ export default function TimetableScreen() {
   const [newCourse, setNewCourse] = useState<Partial<Course>>({});
   const [tempGrade, setTempGrade] = useState(grade);
   const [tempSemester, setTempSemester] = useState(semester);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Subject[]>([]);
 
   const themeColors = {
     background: colorScheme === 'dark' ? '#121212' : '#f2f2f7',
@@ -94,10 +99,25 @@ export default function TimetableScreen() {
     fetchTimetable();
   }, [fetchTimetable]);
 
+  useEffect(() => {
+    const handleSearch = async () => {
+      if (searchQuery.length > 1) {
+        const results = await searchSubjects(searchQuery);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    };
+    const debounce = setTimeout(() => handleSearch(), 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery]);
+
   const handleCellPress = (day: string, startTime: string) => {
     const existingCourse = courses.find(c => c.day === day && c.startTime === startTime);
     setSelectedCell({ day, startTime });
     setNewCourse(existingCourse || { day, startTime, color: SUBJECT_COLORS[courses.length % SUBJECT_COLORS.length] });
+    setSearchQuery(existingCourse?.name || '');
+    setSearchResults([]);
     setIsCourseModalVisible(true);
   };
 
@@ -112,7 +132,7 @@ export default function TimetableScreen() {
       id: newCourse.id || `${selectedCell.day}-${selectedCell.startTime}`,
       name: newCourse.name,
       day: selectedCell.day,
-      startTime: selectedCell.startTime,
+      startTime: newCourse.startTime,
       endTime: newCourse.endTime || '',
       classroom: newCourse.classroom || '',
       professor: newCourse.professor || '',
@@ -164,6 +184,107 @@ export default function TimetableScreen() {
     setSemester(tempSemester);
     setIsPickerModalVisible(false);
   };
+
+  const renderCourseModal = () => (
+    <Modal
+      visible={isCourseModalVisible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setIsCourseModalVisible(false)}
+    >
+      <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.modalBackground }]}>
+        <View style={[styles.modalHeader, { borderBottomColor: themeColors.border }]}>
+          <TouchableOpacity onPress={() => setIsCourseModalVisible(false)} style={styles.modalButton}>
+            <Text style={[styles.modalButtonText, { color: themeColors.accent }]}>취소</Text>
+          </TouchableOpacity>
+          <Text style={[styles.modalTitle, { color: themeColors.text }]}>
+            {newCourse.id ? '과목 편집' : '과목 추가'}
+          </Text>
+          <TouchableOpacity onPress={handleSaveCourse} style={styles.modalButton}>
+            <Text style={[styles.modalButtonText, { color: themeColors.accent, fontWeight: '600' }]}>저장</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목 검색</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+              placeholder="과목명을 검색하세요"
+              placeholderTextColor={themeColors.secondaryText}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchResults.length > 0 && (
+              <ScrollView style={styles.searchResultsContainer} nestedScrollEnabled={true}>
+                {searchResults.map((item) => (
+                  <TouchableOpacity 
+                    key={item.id}
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      setNewCourse(prev => ({ ...prev, name: item.name }));
+                      setSearchQuery(item.name);
+                      setSearchResults([]);
+                    }}
+                  >
+                    <Text style={{ color: themeColors.text }}>{item.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목명 *</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+              placeholder="과목명을 입력하세요"
+              placeholderTextColor={themeColors.secondaryText}
+              value={newCourse.name}
+              onChangeText={(text) => setNewCourse(prev => ({ ...prev, name: text }))}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: themeColors.text }]}>강의실</Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+              placeholder="강의실을 입력하세요"
+              placeholderTextColor={themeColors.secondaryText}
+              value={newCourse.classroom}
+              onChangeText={(text) => setNewCourse(prev => ({ ...prev, classroom: text }))}
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: themeColors.text }]}>색상</Text>
+            <View style={styles.colorGrid}>
+              {SUBJECT_COLORS.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorOption,
+                    { backgroundColor: color },
+                    newCourse.color === color && styles.selectedColor
+                  ]}
+                  onPress={() => setNewCourse(prev => ({ ...prev, color }))}
+                  activeOpacity={0.8}
+                />
+              ))}
+            </View>
+          </View>
+          {newCourse.id && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDeleteCourse}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.deleteButtonText, { color: themeColors.danger }]}>과목 삭제</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -237,75 +358,7 @@ export default function TimetableScreen() {
         </ScrollView>
       )}
 
-      <Modal
-        visible={isCourseModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setIsCourseModalVisible(false)}
-      >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: themeColors.modalBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: themeColors.border }]}>
-            <TouchableOpacity onPress={() => setIsCourseModalVisible(false)} style={styles.modalButton}>
-              <Text style={[styles.modalButtonText, { color: themeColors.accent }]}>취소</Text>
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: themeColors.text }]}>
-              {newCourse.id ? '과목 편집' : '과목 추가'}
-            </Text>
-            <TouchableOpacity onPress={handleSaveCourse} style={styles.modalButton}>
-              <Text style={[styles.modalButtonText, { color: themeColors.accent, fontWeight: '600' }]}>저장</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목명 *</Text>
-              <TextInput
-                style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
-                placeholder="과목명을 입력하세요"
-                placeholderTextColor={themeColors.secondaryText}
-                value={newCourse.name}
-                onChangeText={(text) => setNewCourse(prev => ({ ...prev, name: text }))}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.text }]}>강의실</Text>
-              <TextInput
-                style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
-                placeholder="강의실을 입력하세요"
-                placeholderTextColor={themeColors.secondaryText}
-                value={newCourse.classroom}
-                onChangeText={(text) => setNewCourse(prev => ({ ...prev, classroom: text }))}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: themeColors.text }]}>색상</Text>
-              <View style={styles.colorGrid}>
-                {SUBJECT_COLORS.map((color) => (
-                  <TouchableOpacity
-                    key={color}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      newCourse.color === color && styles.selectedColor
-                    ]}
-                    onPress={() => setNewCourse(prev => ({ ...prev, color }))}
-                    activeOpacity={0.8}
-                  />
-                ))}
-              </View>
-            </View>
-            {newCourse.id && (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={handleDeleteCourse}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.deleteButtonText, { color: themeColors.danger }]}>과목 삭제</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+      {renderCourseModal()}
 
       <Modal
         visible={isPickerModalVisible}
@@ -457,5 +510,17 @@ const styles = StyleSheet.create({
   pickerItemText: {
     fontSize: 18,
     textAlign: 'center',
+  },
+  searchResultsContainer: {
+    height: 150,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+  },
+  searchResultItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
 });
