@@ -143,19 +143,12 @@ export default function PostDetailModal({
                   <TouchableOpacity
                     style={[
                       styles.commentSubmitButton,
-                      !newComment.trim() && { backgroundColor: themeColors.border },
+                      !newComment.trim() && { opacity: 0.5 },
                     ]}
                     onPress={createComment}
                     disabled={!newComment.trim()}
                   >
-                    <Text
-                      style={[
-                        styles.commentSubmitText,
-                        !newComment.trim() && { color: themeColors.secondaryText },
-                      ]}
-                    >
-                      등록
-                    </Text>
+                    <Text style={styles.commentSubmitText}>등록</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -285,7 +278,7 @@ const styles = StyleSheet.create({
   commentInputContainer: {
     flexDirection: 'row',
     marginBottom: 16,
-    alignItems: 'flex-end',
+    alignItems: 'center',
   },
   commentInput: {
     flex: 1,
@@ -301,6 +294,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
+    backgroundColor: '#007AFF',
   },
   commentSubmitText: {
     color: 'white',
