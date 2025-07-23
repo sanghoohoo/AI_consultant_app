@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { getTimetable, saveTimetable } from '../../api/timetable';
-import { searchSubjects, Subject } from '../../api/subjects';
+import { searchSubjects, getAllSubjects, Subject } from '../../api/subjects';
 import { Course } from '../../types/timetable';
 import { useColorScheme } from '../../components/useColorScheme';
 
@@ -66,6 +66,7 @@ export default function TimetableScreen() {
   const [tempSemester, setTempSemester] = useState(semester);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Subject[]>([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const themeColors = {
     background: colorScheme === 'dark' ? '#121212' : '#f2f2f7',
@@ -100,17 +101,28 @@ export default function TimetableScreen() {
   }, [fetchTimetable]);
 
   useEffect(() => {
-    const handleSearch = async () => {
-      if (searchQuery.length > 1) {
-        const results = await searchSubjects(searchQuery);
-        setSearchResults(results);
-      } else {
-        setSearchResults([]);
-      }
+    const fetchAll = async () => {
+      const results = await getAllSubjects();
+      setSearchResults(results);
     };
-    const debounce = setTimeout(() => handleSearch(), 300);
-    return () => clearTimeout(debounce);
-  }, [searchQuery]);
+
+    const search = async () => {
+      const results = await searchSubjects(searchQuery);
+      setSearchResults(results);
+    };
+
+    if (!isSearchFocused) {
+      setSearchResults([]);
+      return;
+    }
+
+    if (searchQuery.length > 1) {
+      const debounce = setTimeout(() => search(), 300);
+      return () => clearTimeout(debounce);
+    } else {
+      fetchAll();
+    }
+  }, [searchQuery, isSearchFocused]);
 
   const handleCellPress = (day: string, startTime: string) => {
     const existingCourse = courses.find(c => c.day === day && c.startTime === startTime);
@@ -205,83 +217,99 @@ export default function TimetableScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목 검색</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
-              placeholder="과목명을 검색하세요"
-              placeholderTextColor={themeColors.secondaryText}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchResults.length > 0 && (
-              <ScrollView style={styles.searchResultsContainer} nestedScrollEnabled={true}>
-                {searchResults.map((item) => (
-                  <TouchableOpacity 
-                    key={item.id}
-                    style={styles.searchResultItem}
-                    onPress={() => {
-                      setNewCourse(prev => ({ ...prev, name: item.name }));
-                      setSearchQuery(item.name);
-                      setSearchResults([]);
-                    }}
-                  >
-                    <Text style={{ color: themeColors.text }}>{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목명 *</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
-              placeholder="과목명을 입력하세요"
-              placeholderTextColor={themeColors.secondaryText}
-              value={newCourse.name}
-              onChangeText={(text) => setNewCourse(prev => ({ ...prev, name: text }))}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.text }]}>강의실</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
-              placeholder="강의실을 입력하세요"
-              placeholderTextColor={themeColors.secondaryText}
-              value={newCourse.classroom}
-              onChangeText={(text) => setNewCourse(prev => ({ ...prev, classroom: text }))}
-            />
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: themeColors.text }]}>색상</Text>
-            <View style={styles.colorGrid}>
-              {SUBJECT_COLORS.map((color) => (
-                <TouchableOpacity
-                  key={color}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: color },
-                    newCourse.color === color && styles.selectedColor
-                  ]}
-                  onPress={() => setNewCourse(prev => ({ ...prev, color }))}
-                  activeOpacity={0.8}
-                />
-              ))}
-            </View>
-          </View>
-          {newCourse.id && (
+        <FlatList
+          style={styles.modalContent}
+          data={searchResults}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item, index }) => (
             <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={handleDeleteCourse}
-              activeOpacity={0.8}
+              style={[
+                styles.searchResultItem,
+                {
+                  borderColor: themeColors.border,
+                  backgroundColor: themeColors.cardBackground,
+                },
+                index === 0 && styles.firstSearchResultItem,
+                index === searchResults.length - 1 && styles.lastSearchResultItem,
+              ]}
+              onPress={() => {
+                setNewCourse(prev => ({ ...prev, name: item.name }));
+                setSearchQuery(item.name);
+                setSearchResults([]);
+              }}
             >
-              <Text style={[styles.deleteButtonText, { color: themeColors.danger }]}>과목 삭제</Text>
+              <Text style={{ color: themeColors.text }}>{item.name}</Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+          ListHeaderComponent={
+            <View>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목 검색</Text>
+                <TextInput
+                  style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+                  placeholder="과목명을 검색하세요"
+                  placeholderTextColor={themeColors.secondaryText}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
+                />
+              </View>
+            </View>
+          }
+          ListFooterComponent={
+            <View style={searchResults.length > 0 ? { marginTop: 16 } : {}}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목명 *</Text>
+                <TextInput
+                  style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+                  placeholder="과목명을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
+                  value={newCourse.name}
+                  onChangeText={(text) => setNewCourse(prev => ({ ...prev, name: text }))}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>강의실</Text>
+                <TextInput
+                  style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
+                  placeholder="강의실을 입력하세요"
+                  placeholderTextColor={themeColors.secondaryText}
+                  value={newCourse.classroom}
+                  onChangeText={(text) => setNewCourse(prev => ({ ...prev, classroom: text }))}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: themeColors.text }]}>색상</Text>
+                <View style={styles.colorGrid}>
+                  {SUBJECT_COLORS.map((color) => (
+                    <TouchableOpacity
+                      key={color}
+                      style={[
+                        styles.colorOption,
+                        { backgroundColor: color },
+                        newCourse.color === color && styles.selectedColor
+                      ]}
+                      onPress={() => setNewCourse(prev => ({ ...prev, color }))}
+                      activeOpacity={0.8}
+                    />
+                  ))}
+                </View>
+              </View>
+              {newCourse.id && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={handleDeleteCourse}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.deleteButtonText, { color: themeColors.danger }]}>과목 삭제</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          }
+          keyboardShouldPersistTaps="handled"
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -511,16 +539,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
   },
-  searchResultsContainer: {
-    height: 150,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-  },
   searchResultItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+  },
+  firstSearchResultItem: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  lastSearchResultItem: {
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
   },
 });
