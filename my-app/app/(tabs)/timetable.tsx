@@ -243,7 +243,7 @@ export default function TimetableScreen() {
           )}
           ListHeaderComponent={
             <View>
-              <View style={styles.inputGroup}>
+              <View style={[styles.inputGroup, { marginBottom: searchResults.length > 0 ? 0 : 24 }]}>
                 <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목 검색</Text>
                 <TextInput
                   style={[styles.textInput, { backgroundColor: themeColors.inputBackground, borderColor: themeColors.inputBorder, color: themeColors.text }]}
@@ -258,7 +258,7 @@ export default function TimetableScreen() {
             </View>
           }
           ListFooterComponent={
-            <View style={searchResults.length > 0 ? { marginTop: 16 } : {}}>
+            <View style={searchResults.length > 0 ? { marginTop: 24 } : {}}>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: themeColors.text }]}>과목명 *</Text>
                 <TextInput
