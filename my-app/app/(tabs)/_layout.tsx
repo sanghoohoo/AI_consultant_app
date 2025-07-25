@@ -5,7 +5,6 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
@@ -41,6 +40,13 @@ export default function TabLayout() {
         options={{
           title: '시간표',
           tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="roadmap"
+        options={{
+          title: '로드맵',
+          tabBarIcon: ({ color }) => <TabBarIcon name="road" color={color} />,
         }}
       />
       <Tabs.Screen
