@@ -25,7 +25,7 @@ export const findMatchingFieldId = async (hopeMajor: string): Promise<number | n
     
     const { data: matchData, error: matchError } = await supabase.rpc('match_major_fields', {
         query_embedding: embeddingData.embedding,
-        match_threshold: 0.7, // 유사도 임계값 (조정 필요)
+        match_threshold: 0.3, // 유사도 임계값 (조정 필요)
         match_count: 1
     });
 
