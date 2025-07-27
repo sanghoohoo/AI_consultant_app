@@ -14,29 +14,12 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '../../components/useColorScheme';
+import { useAuth, UserProfile } from '../../contexts/AuthContext';
 
-interface UserProfile {
-  id: string;
-  name?: string;
-  major_interest?: string;
-  hope_university?: string;
-  hope_major?: string;
-  intro?: string;
-  suneung?: {
-    korean: { grade: string; percentile: string };
-    math: { grade: string; percentile: string };
-    english: { grade: string };
-    koreanHistory: { grade: string };
-    inquiry1: { grade: string; percentile: string };
-    inquiry2: { grade: string; percentile: string };
-  };
-}
 
 export default function Settings() {
-  const [user, setUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const { user, profile, updateProfile, signOut } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
-  const [isDetailMode, setIsDetailMode] = useState(false); // 상세 입력 모드 토글
   const [isLoading, setIsLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
@@ -62,7 +45,7 @@ export default function Settings() {
   };
 
   // 폼 상태
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Partial<UserProfile>>({
     name: '',
     major_interest: '',
     hope_university: '',
@@ -80,49 +63,11 @@ export default function Settings() {
 
   // 사용자 정보 로드
   useEffect(() => {
-    const loadUserInfo = async () => {
-      try {
-        setProfileLoading(true);
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError) throw userError;
-        
-        setUser(userData.user);
-
-        if (userData.user) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('user_profile')
-            .select('*')
-            .eq('id', userData.user.id)
-            .single();
-
-          if (profileData) {
-            setUserProfile(profileData);
-            setFormData({
-              name: profileData.name || '',
-              major_interest: profileData.major_interest || '',
-              hope_university: profileData.hope_university || '',
-              hope_major: profileData.hope_major || '',
-              intro: profileData.intro || '',
-              suneung: profileData.suneung || {
-                korean: { grade: '', percentile: '' },
-                math: { grade: '', percentile: '' },
-                english: { grade: '' },
-                koreanHistory: { grade: '' },
-                inquiry1: { grade: '', percentile: '' },
-                inquiry2: { grade: '', percentile: '' },
-              },
-            });
-          }
-        }
-      } catch (error) {
-        console.error('사용자 정보 로드 오류:', error);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-
-    loadUserInfo();
-  }, []);
+    if (profile) {
+        setFormData(profile);
+    }
+    setProfileLoading(false);
+  }, [profile]);
 
   // 로그아웃 핸들러
   const handleLogout = async () => {
@@ -136,7 +81,7 @@ export default function Settings() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase.auth.signOut();
+              await signOut();
               router.replace('/(auth)/Login');
             } catch (error) {
               console.error('로그아웃 오류:', error);
@@ -154,9 +99,9 @@ export default function Settings() {
 
     setIsLoading(true);
     try {
-      let profileDataToSave = { ...formData };
+      let profileDataToSave: Partial<UserProfile> = { ...formData };
 
-      // 희망 학과가 입력되었을 경우, 벡터 검색을 통해 희망 전공 계열을 자동 설정
+      // 희망 학과가 변경되었을 경우, 희망 전공 계열을 업데이트
       if (formData.hope_major) {
         // 1. 희망 학과 텍스트로 임베딩 생성
         const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke('create-embedding', {
@@ -170,7 +115,7 @@ export default function Settings() {
         // 2. 생성된 임베딩으로 가장 유사한 전공 계열 검색
         const { data: matchData, error: matchError } = await supabase.rpc('match_major_fields', {
             query_embedding: embeddingData.embedding,
-            match_threshold: 0.5, // 임계값을 약간 낮춰서 매칭 확률을 높임
+            match_threshold: 0.3, // 임계값을 낮춰서 매칭 확률을 높임
             match_count: 1
         });
 
@@ -182,24 +127,28 @@ export default function Settings() {
         if (matchData && matchData.length > 0) {
           profileDataToSave.major_interest = matchData[0].name;
         } else {
-          // 매칭되는 항목이 없을 경우 '기타'로 설정하거나 사용자에게 알림
           profileDataToSave.major_interest = '기타'; 
         }
+      } else {
+        // 희망 학과가 비어있으면 희망 전공 계열도 비움
+        profileDataToSave.major_interest = '';
       }
 
-      const { error } = await supabase
+      const { data: updatedData, error } = await supabase
         .from('user_profile')
         .upsert({
           id: user.id,
           ...profileDataToSave,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // 로컬 상태 업데이트
-      const updatedProfile = { id: user.id, ...profileDataToSave };
-      setUserProfile(updatedProfile);
-      setFormData(profileDataToSave);
+      // 전역 프로필 상태 업데이트
+      if(updatedData) {
+        updateProfile(updatedData as UserProfile);
+      }
 
       setModalVisible(false); // 모달 닫기
       Alert.alert('성공', '프로필이 저장되었습니다.');
@@ -218,10 +167,12 @@ export default function Settings() {
 
   // 총 백분위 계산
   const calculateTotalPercentile = () => {
-    const korean = parseFloat(formData.suneung.korean.percentile) || 0;
-    const math = parseFloat(formData.suneung.math.percentile) || 0;
-    const inquiry1 = parseFloat(formData.suneung.inquiry1.percentile) || 0;
-    const inquiry2 = parseFloat(formData.suneung.inquiry2.percentile) || 0;
+    const suneung = formData.suneung;
+    if (!suneung) return 0;
+    const korean = parseFloat(suneung.korean.percentile) || 0;
+    const math = parseFloat(suneung.math.percentile) || 0;
+    const inquiry1 = parseFloat(suneung.inquiry1.percentile) || 0;
+    const inquiry2 = parseFloat(suneung.inquiry2.percentile) || 0;
     const inquiryAvg = (inquiry1 + inquiry2) / 2;
     return korean + math + inquiryAvg;
   };
@@ -278,23 +229,23 @@ export default function Settings() {
             <View style={styles.profileLoadingContainer}>
               {/* 로딩 중에는 빈 공간으로 유지 */}
             </View>
-          ) : userProfile ? (
+          ) : profile ? (
             <View style={styles.profileInfo}>
               <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>이름:</Text>
-                <Text style={styles.profileValue}>{userProfile.name || '미입력'}</Text>
+                <Text style={styles.profileValue}>{profile.name || '미입력'}</Text>
               </View>
               <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>희망 전공:</Text>
-                <Text style={styles.profileValue}>{userProfile.major_interest || '미입력'}</Text>
+                <Text style={styles.profileValue}>{profile.major_interest || '미입력'}</Text>
               </View>
               <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>희망 대학:</Text>
-                <Text style={styles.profileValue}>{userProfile.hope_university || '미입력'}</Text>
+                <Text style={styles.profileValue}>{profile.hope_university || '미입력'}</Text>
               </View>
               <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>희망 학과:</Text>
-                <Text style={styles.profileValue}>{userProfile.hope_major || '미입력'}</Text>
+                <Text style={styles.profileValue}>{profile.hope_major || '미입력'}</Text>
               </View>
             </View>
           ) : (
@@ -383,12 +334,12 @@ export default function Settings() {
                 <View style={styles.suneungInputs}>
                   <TextInput
                     style={styles.suneungInput}
-                    value={formData.suneung.korean.grade}
+                    value={formData.suneung?.korean.grade}
                     onChangeText={(text) => setFormData({
                       ...formData,
                       suneung: {
                         ...formData.suneung,
-                        korean: { ...formData.suneung.korean, grade: text }
+                        korean: { ...formData.suneung?.korean, grade: text }
                       }
                     })}
                     placeholder="등급"
@@ -397,12 +348,12 @@ export default function Settings() {
                   />
                   <TextInput
                     style={styles.suneungInput}
-                    value={formData.suneung.korean.percentile}
+                    value={formData.suneung?.korean.percentile}
                     onChangeText={(text) => setFormData({
                       ...formData,
                       suneung: {
                         ...formData.suneung,
-                        korean: { ...formData.suneung.korean, percentile: text }
+                        korean: { ...formData.suneung?.korean, percentile: text }
                       }
                     })}
                     placeholder="백분위"
@@ -418,12 +369,12 @@ export default function Settings() {
                 <View style={styles.suneungInputs}>
                   <TextInput
                     style={styles.suneungInput}
-                    value={formData.suneung.math.grade}
+                    value={formData.suneung?.math.grade}
                     onChangeText={(text) => setFormData({
                       ...formData,
                       suneung: {
                         ...formData.suneung,
-                        math: { ...formData.suneung.math, grade: text }
+                        math: { ...formData.suneung?.math, grade: text }
                       }
                     })}
                     placeholder="등급"
@@ -432,12 +383,12 @@ export default function Settings() {
                   />
                   <TextInput
                     style={styles.suneungInput}
-                    value={formData.suneung.math.percentile}
+                    value={formData.suneung?.math.percentile}
                     onChangeText={(text) => setFormData({
                       ...formData,
                       suneung: {
                         ...formData.suneung,
-                        math: { ...formData.suneung.math, percentile: text }
+                        math: { ...formData.suneung?.math, percentile: text }
                       }
                     })}
                     placeholder="백분위"
@@ -453,7 +404,7 @@ export default function Settings() {
                 <View style={styles.suneungInputs}>
                   <TextInput
                     style={styles.suneungInput}
-                    value={formData.suneung.english.grade}
+                    value={formData.suneung?.english.grade}
                     onChangeText={(text) => setFormData({
                       ...formData,
                       suneung: {

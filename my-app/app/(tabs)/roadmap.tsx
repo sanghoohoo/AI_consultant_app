@@ -4,14 +4,13 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, SafeAreaView, To
 import { useColorScheme } from '../../components/useColorScheme';
 import { getRoadmapByField, findMatchingFieldId, RoadmapDetails } from '../../api/roadmap';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserProfile } from '../../api/user';
 
 const RoadmapScreen = () => {
     const colorScheme = useColorScheme();
     const [roadmap, setRoadmap] = useState<RoadmapDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { user } = useAuth(); // useAuth를 컴포넌트 최상위 레벨에서 호출
+    const { user, profile } = useAuth(); // AuthContext에서 user와 profile을 가져옴
 
     const theme = {
         background: colorScheme === 'dark' ? '#121212' : '#F2F2F7',
@@ -30,10 +29,18 @@ const RoadmapScreen = () => {
                 return;
             }
 
+            // 프로필이 로드되었는지 확인
+            if (!profile) {
+                setError("사용자 프로필을 불러오는 중입니다...");
+                // 프로필이 로드될 때까지 로딩 상태를 유지할 수 있습니다.
+                // 또는, AuthContext에서 프로필 로딩 상태를 별도로 관리할 수도 있습니다.
+                return;
+            }
+
             try {
                 setIsLoading(true);
-                const profile = await getUserProfile(user.id);
-                const hopeMajor = profile?.hope_major;
+                setError(null);
+                const hopeMajor = profile.hope_major;
 
                 if (!hopeMajor) {
                     setError("희망 전공을 설정해주세요.");
@@ -64,7 +71,7 @@ const RoadmapScreen = () => {
         };
 
         fetchRoadmap();
-    }, [user]); // user 객체가 변경될 때마다 실행
+    }, [user, profile]); // user 또는 profile이 변경될 때마다 실행
 
     if (isLoading) {
         return <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.accent} /></View>;

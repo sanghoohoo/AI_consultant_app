@@ -17,11 +17,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const generateEmbeddings = async () => {
-  // 1. major_fields 테이블에서 임베딩이 없는 모든 데이터 가져오기
+  // 1. major_fields 테이블에서 모든 데이터 가져오기
   const { data: fields, error: selectError } = await supabase
     .from('major_fields')
-    .select('id, name')
-    .is('embedding', null);
+    .select('id, name, example_majors');
 
   if (selectError) {
     console.error('Error fetching major fields:', selectError);
@@ -29,20 +28,23 @@ const generateEmbeddings = async () => {
   }
 
   if (!fields || fields.length === 0) {
-    console.log('No major fields found without embeddings. All set!');
+    console.log('No major fields found.');
     return;
   }
 
   console.log(`Found ${fields.length} major fields to process. Generating embeddings...`);
 
-  // 2. 각 name에 대해 임베딩 생성 및 업데이트
+  // 2. 각 항목에 대해 임베딩 생성 및 업데이트
   for (const field of fields) {
     try {
+      // name과 example_majors를 조합하여 임베딩할 텍스트 생성
+      const textToEmbed = `${field.name}: ${field.example_majors || ''}`;
       console.log(`Processing: ${field.name}`);
+
       // Edge function 호출하여 임베딩 생성
       const { data: embeddingData, error: functionError } = await supabase.functions.invoke(
         'create-embedding',
-        { body: { text: field.name } }
+        { body: { text: textToEmbed } }
       );
 
       if (functionError) {

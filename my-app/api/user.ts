@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 export const getUserProfile = async (userId: string) => {
   const { data, error } = await supabase
     .from('user_profile')
-    .select('hope_major')
+    .select('*')
     .eq('id', userId)
     .single();
 

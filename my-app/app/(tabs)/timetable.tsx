@@ -188,7 +188,7 @@ export default function TimetableScreen() {
   };
 
   const getCourseForCell = (day: string, startTime: string) => {
-    return courses.find(c => c.day === day && c.startTime.startsWith(startTime.split(':')[0]));
+    return courses.find(c => c.day === day && c.startTime === startTime);
   };
 
   const handlePickerConfirm = () => {
