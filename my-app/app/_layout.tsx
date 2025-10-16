@@ -49,9 +49,9 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (isLoggedIn && inAuthGroup) {
-      router.replace('/main');
+      router.replace('/(tabs)/main');
     } else if (!isLoggedIn && !inAuthGroup) {
-      router.replace('/Login');
+      router.replace('/(auth)/Login');
     }
   }, [isLoggedIn, authLoading, segments, router]);
 

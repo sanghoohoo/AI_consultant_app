@@ -349,7 +349,7 @@ function ChatScreen({
                 sender: msg.sender,
                 timestamp: new Date(msg.created_at).getTime()
               })),
-              userId: null,
+              userId: userId,
               attachments: [],
               profile: userProfile,
             };
