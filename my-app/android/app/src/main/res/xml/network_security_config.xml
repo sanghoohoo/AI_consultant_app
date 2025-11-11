@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 모든 도메인에 대해 cleartext (HTTP) 허용 -->
+    <!-- 프로덕션 환경에서는 특정 도메인만 지정하는 것이 권장됨 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 시스템 인증서 신뢰 -->
+            <certificates src="system" />
+            <!-- 사용자 인증서 신뢰 (개발용) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 특정 도메인에 대한 세부 설정 -->
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Render 백엔드 (HTTPS 전용) -->
+        <domain includeSubdomains="true">ai-consultant-hwiw.onrender.com</domain>
+        <!-- Supabase (HTTPS 전용) -->
+        <domain includeSubdomains="true">supabase.co</domain>
+    </domain-config>
+
+    <!-- 개발/테스트용 localhost 설정 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain> <!-- Android Emulator -->
+        <domain includeSubdomains="true">10.0.3.2</domain> <!-- Genymotion -->
+    </domain-config>
+</network-security-config>

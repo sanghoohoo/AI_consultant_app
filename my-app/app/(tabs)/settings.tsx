@@ -15,13 +15,20 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '../../components/useColorScheme';
 import { useAuth, UserProfile } from '../../contexts/AuthContext';
+import SchoolRecordUpload from '../../components/SchoolRecordUpload';
+import SchoolRecordDetail from '../../components/SchoolRecordDetail';
+import { fetchStudentData } from '../../api/academic';
+import { StudentProfile } from '../../types/schoolRecord';
 
 
 export default function Settings() {
-  const { user, profile, updateProfile, signOut } = useAuth();
+  const { user, profile, updateProfile, signOut, session } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [schoolRecordData, setSchoolRecordData] = useState<StudentProfile | null>(null);
+  const [schoolRecordLoading, setSchoolRecordLoading] = useState(false);
+  const [showSchoolRecordUpload, setShowSchoolRecordUpload] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme();
 
@@ -68,6 +75,43 @@ export default function Settings() {
     }
     setProfileLoading(false);
   }, [profile]);
+
+  // 생기부 데이터 로드
+  const loadSchoolRecordData = async () => {
+    if (!session?.access_token) return;
+
+    setSchoolRecordLoading(true);
+    try {
+      const data = await fetchStudentData(session.access_token);
+      setSchoolRecordData(data);
+    } catch (error: any) {
+      console.error('생기부 데이터 로드 오류:', error);
+      // 404는 데이터가 없는 정상 상태
+      if (!error.message.includes('404')) {
+        Alert.alert('오류', '생기부 데이터를 불러올 수 없습니다.');
+      }
+    } finally {
+      setSchoolRecordLoading(false);
+    }
+  };
+
+  // 초기 생기부 데이터 로드
+  useEffect(() => {
+    if (session?.access_token) {
+      loadSchoolRecordData();
+    }
+  }, [session?.access_token]);
+
+  // 업로드 완료 후 핸들러
+  const handleUploadComplete = () => {
+    loadSchoolRecordData();
+    setShowSchoolRecordUpload(false);
+    Alert.alert(
+      '업로드 완료',
+      '생기부 데이터를 성공적으로 불러왔습니다.\n아래에서 확인하실 수 있습니다.',
+      [{ text: '확인' }]
+    );
+  };
 
   // 로그아웃 핸들러
   const handleLogout = async () => {
@@ -254,6 +298,7 @@ export default function Settings() {
             </TouchableOpacity>
           )}
         </View>
+
 
         {/* 로그아웃 버튼 */}
         <View style={styles.section}>
@@ -443,6 +488,49 @@ export default function Settings() {
                 textAlignVertical="top"
                 placeholderTextColor={themeColors.secondaryText}
               />
+            </View>
+
+            {/* 생기부 정보 섹션 */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.formSectionTitle}>📚 생기부 정보</Text>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setShowSchoolRecordUpload(!showSchoolRecordUpload)}
+                >
+                  <Text style={styles.editButtonText}>
+                    {showSchoolRecordUpload ? '닫기' : schoolRecordData ? '재업로드' : '업로드'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 업로드 컴포넌트 */}
+              {showSchoolRecordUpload && session && user?.email && (
+                <View style={{ marginBottom: 15 }}>
+                  <SchoolRecordUpload
+                    accessToken={session.access_token}
+                    userEmail={user.email}
+                    themeColors={themeColors}
+                    onUploadComplete={handleUploadComplete}
+                  />
+                </View>
+              )}
+
+              {/* 데이터 표시 */}
+              {schoolRecordLoading ? (
+                <View style={styles.profileLoadingContainer}>
+                  <Text style={styles.profileLabel}>데이터 로딩 중...</Text>
+                </View>
+              ) : schoolRecordData ? (
+                <SchoolRecordDetail data={schoolRecordData} themeColors={themeColors} />
+              ) : !showSchoolRecordUpload ? (
+                <TouchableOpacity
+                  style={styles.addProfileButton}
+                  onPress={() => setShowSchoolRecordUpload(true)}
+                >
+                  <Text style={styles.addProfileText}>+ 생기부 PDF 업로드하기</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -760,5 +848,11 @@ const createStyles = (themeColors: any) => StyleSheet.create({
   detailModeToggleText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  // 생기부 스크롤뷰 스타일
+  schoolRecordScrollView: {
+    maxHeight: 300, // 최대 높이 설정
+    borderRadius: 8,
+    backgroundColor: themeColors.inputBackground,
   },
 });
