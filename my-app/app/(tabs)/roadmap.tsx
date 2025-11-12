@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useColorScheme } from '../../components/useColorScheme';
 import { getRoadmapByField, findMatchingFieldId, RoadmapDetails } from '../../api/roadmap';
 import { useAuth } from '../../contexts/AuthContext';
+import ComparisonSection from '../../components/ComparisonSection';
+import { useFocusEffect } from '@react-navigation/native';
 
 const RoadmapScreen = () => {
     const colorScheme = useColorScheme();
@@ -21,57 +23,58 @@ const RoadmapScreen = () => {
         sectionHeader: colorScheme === 'dark' ? '#333333' : '#E5E5EA',
     };
 
-    useEffect(() => {
-        const fetchRoadmap = async () => {
-            if (!user) {
-                setError("로그인이 필요합니다.");
-                setIsLoading(false);
-                return;
-            }
-
-            // 프로필이 로드되었는지 확인
-            if (!profile) {
-                setError("사용자 프로필을 불러오는 중입니다...");
-                // 프로필이 로드될 때까지 로딩 상태를 유지할 수 있습니다.
-                // 또는, AuthContext에서 프로필 로딩 상태를 별도로 관리할 수도 있습니다.
-                return;
-            }
-
-            try {
-                setIsLoading(true);
-                setError(null);
-                const hopeMajor = profile.hope_major;
-
-                if (!hopeMajor) {
-                    setError("희망 전공을 설정해주세요.");
+    // 탭이 포커스될 때마다 데이터 새로고침
+    useFocusEffect(
+        useCallback(() => {
+            const fetchRoadmap = async () => {
+                if (!user) {
+                    setError("로그인이 필요합니다.");
                     setIsLoading(false);
                     return;
                 }
 
-                const fieldId = await findMatchingFieldId(hopeMajor);
-
-                if (!fieldId) {
-                    setError("희망 전공과 일치하는 로드맵을 찾을 수 없습니다.");
-                    setIsLoading(false);
+                // 프로필이 로드되었는지 확인
+                if (!profile) {
+                    setError("사용자 프로필을 불러오는 중입니다...");
                     return;
                 }
 
-                const data = await getRoadmapByField(fieldId);
-                if (data) {
-                    setRoadmap(data);
-                } else {
-                    setError("로드맵 정보를 불러오는데 실패했습니다.");
-                }
-            } catch (e) {
-                setError("오류가 발생했습니다.");
-                console.error(e);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+                try {
+                    setIsLoading(true);
+                    setError(null);
+                    const hopeMajor = profile.hope_major;
 
-        fetchRoadmap();
-    }, [user, profile]); // user 또는 profile이 변경될 때마다 실행
+                    if (!hopeMajor) {
+                        setError("희망 전공을 설정해주세요.");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    const fieldId = await findMatchingFieldId(hopeMajor);
+
+                    if (!fieldId) {
+                        setError("희망 전공과 일치하는 로드맵을 찾을 수 없습니다.");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    const data = await getRoadmapByField(fieldId);
+                    if (data) {
+                        setRoadmap(data);
+                    } else {
+                        setError("로드맵 정보를 불러오는데 실패했습니다.");
+                    }
+                } catch (e) {
+                    setError("오류가 발생했습니다.");
+                    console.error(e);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            fetchRoadmap();
+        }, [user, profile])
+    );
 
     if (isLoading) {
         return <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }]}><ActivityIndicator size="large" color={theme.accent} /></View>;
@@ -85,7 +88,10 @@ const RoadmapScreen = () => {
         <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>나의 로드맵</Text>
-                
+
+                {/* 상대비교 섹션 */}
+                <ComparisonSection colorScheme={colorScheme} />
+
                 {roadmap ? (
                     <>
                         {/* 계열 정보 카드 */}
