@@ -91,6 +91,7 @@ function ChatScreen({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [botStreaming, setBotStreaming] = useState(false);
   const [streamedBotMessage, setStreamedBotMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string>("");
   const [userProfile, setUserProfile] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -357,15 +358,34 @@ function ChatScreen({
           };
 
           wsRef.current.onmessage = (e) => {
-            const data = e.data;
-            
-            if (data === "[STREAM_END]") {
-              wsRef.current?.close();
-              return;
+            try {
+              const data = JSON.parse(e.data);
+
+              // 타입별 처리
+              if (data.type === 'thinking' || data.type === 'searching' || data.type === 'generating') {
+                // 상태 메시지 표시
+                setStatusMessage(data.message);
+              } else if (data.type === 'answer') {
+                // 최종 답변
+                setStatusMessage("");
+                botText = data.message;
+                setStreamedBotMessage(botText);
+              } else if (data.type === 'done') {
+                // 완료
+                wsRef.current?.close();
+              }
+            } catch (error) {
+              // JSON 파싱 실패 시 기존 방식 사용 (하위 호환성)
+              const data = e.data;
+
+              if (data === "[STREAM_END]") {
+                wsRef.current?.close();
+                return;
+              }
+
+              botText += data;
+              setStreamedBotMessage(botText);
             }
-            
-            botText += data;
-            setStreamedBotMessage(botText);
           };
 
           wsRef.current.onerror = (error) => {
@@ -510,13 +530,29 @@ function ChatScreen({
         ListFooterComponent={() => (
           botStreaming ? (
             <View style={[styles.messageWrapper, styles.aiMessageWrapper]}>
-              <View style={[styles.messageBubble, { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg, flexDirection: 'row', alignItems: 'center' }]}>
-                {streamedBotMessage.length === 0 && (
-                  <ActivityIndicator size="small" color={themeColors.aiMessageText} style={{ marginRight: 8 }} />
+              <View style={[styles.messageBubble, { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }]}>
+                {statusMessage ? (
+                  // 상태 메시지 표시 (도구 호출 중)
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={themeColors.aiMessageText} style={{ marginRight: 8 }} />
+                    <Text style={[{ color: themeColors.aiMessageText, fontSize: 14, fontStyle: 'italic' }]}>
+                      {statusMessage}
+                    </Text>
+                  </View>
+                ) : streamedBotMessage.length === 0 ? (
+                  // 초기 로딩
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={themeColors.aiMessageText} style={{ marginRight: 8 }} />
+                    <Text style={[{ color: themeColors.aiMessageText }]}>
+                      AI가 응답을 준비중입니다...
+                    </Text>
+                  </View>
+                ) : (
+                  // 답변 표시
+                  <MarkdownDisplay style={markdownStyles}>
+                    {streamedBotMessage}
+                  </MarkdownDisplay>
                 )}
-                <MarkdownDisplay style={markdownStyles}>
-                  {streamedBotMessage || 'AI가 응답을 생성중입니다...'}
-                </MarkdownDisplay>
               </View>
             </View>
           ) : null
