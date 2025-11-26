@@ -140,9 +140,11 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({ colorScheme }) =>
 
   const getPercentileColor = (percentile?: number) => {
     if (!percentile) return theme.secondaryText;
-    if (percentile <= 0.25) return theme.success;  // Top 25%
-    if (percentile <= 0.50) return theme.warning;  // Top 50%
-    return theme.danger;  // Bottom 50%
+    // percentile = 자신보다 성적이 나쁜 사람의 비율
+    // 낮은 값 = 성적이 나쁨, 높은 값 = 성적이 좋음
+    if (percentile >= 0.75) return theme.success;  // 상위 25%
+    if (percentile >= 0.50) return theme.warning;  // 상위 50%
+    return theme.danger;  // 하위 50%
   };
 
   const renderGradeComparison = () => {
@@ -190,7 +192,7 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({ colorScheme }) =>
             {percentile !== undefined && (
               <View style={[styles.percentileBadge, { backgroundColor: getPercentileColor(percentile) }]}>
                 <Text style={styles.percentileText}>
-                  상위 {(percentile * 100).toFixed(0)}%
+                  상위 {((1 - percentile) * 100).toFixed(0)}%
                 </Text>
               </View>
             )}
