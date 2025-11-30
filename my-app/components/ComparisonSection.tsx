@@ -79,12 +79,8 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({ colorScheme }) =>
 
     setIsLoading(true);
     try {
-      const [stats, persona] = await Promise.all([
-        getComparativeStats(session.access_token),
-        getPersonaComparison(session.access_token),
-      ]);
+      const stats = await getComparativeStats(session.access_token);
       setComparativeStats(stats);
-      setPersonaComparisonState(persona);
     } catch (error) {
       console.error('비교 데이터 조회 실패:', error);
     } finally {
@@ -239,12 +235,17 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({ colorScheme }) =>
             </View>
           </View>
         ) : (
-          <TouchableOpacity
-            onPress={() => setShowMajorModal(true)}
-            style={[styles.setMajorButton, { backgroundColor: theme.accent }]}
-          >
-            <Text style={styles.setMajorButtonText}>관심학과 설정하기</Text>
-          </TouchableOpacity>
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateIcon}>🎯</Text>
+            <Text style={[styles.emptyStateTitle, { color: theme.text }]}>
+              희망 대학/학과를{'\n'}설정해 주세요
+            </Text>
+            <Text style={[styles.emptyStateDescription, { color: theme.secondaryText }]}>
+              내 정보 입력 {'>'} 희망 대학·학과에서{'\n'}
+              관심학과를 설정하시면{'\n'}
+              입시 상대비교 데이터를 확인하실 수 있습니다
+            </Text>
+          </View>
         )}
       </View>
 
@@ -269,59 +270,6 @@ const ComparisonSection: React.FC<ComparisonSectionProps> = ({ colorScheme }) =>
                   {comparativeStats.mock_exam_stats.user_avg_percentile.toFixed(1)}%
                 </Text>
               </View>
-            </View>
-          )}
-
-          {/* 생기부 특성 비교 카드 */}
-          {personaComparison && personaComparison.traits && personaComparison.traits.length > 0 && (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>🎓 생기부 특성 비교</Text>
-              <Text style={[styles.matchText, { color: theme.accent }]}>
-                전체 매칭도: {(personaComparison.overall_match * 100).toFixed(0)}%
-              </Text>
-
-              {personaComparison.traits.slice(0, 5).map((trait, index) => {
-                const percentage = (trait.user_strength / trait.average_strength) * 100;
-                const color = trait.status === 'strong' ? theme.success : trait.status === 'weak' ? theme.danger : theme.warning;
-                return (
-                  <View key={index} style={styles.traitItem}>
-                    <Text style={[styles.traitName, { color: theme.text }]}>{trait.trait}</Text>
-                    <View style={styles.gradeComparisonRow}>
-                      <View style={styles.gradeItem}>
-                        <Text style={[styles.gradeLabel, { color: theme.secondaryText }]}>내 점수</Text>
-                        <Text style={[styles.gradeValue, { color: theme.text }]}>
-                          {trait.user_strength.toFixed(1)}
-                        </Text>
-                      </View>
-                      <Text style={[styles.vsText, { color: theme.accent }]}>VS</Text>
-                      <View style={styles.gradeItem}>
-                        <Text style={[styles.gradeLabel, { color: theme.secondaryText }]}>평균</Text>
-                        <Text style={[styles.gradeValue, { color: theme.text }]}>
-                          {trait.average_strength.toFixed(1)}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[styles.percentileBadge, { backgroundColor: color }]}>
-                      <Text style={styles.percentileText}>
-                        {percentage >= 100 ? '평균 이상' : '평균 이하'}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-
-              {personaComparison.recommendations && personaComparison.recommendations.length > 0 && (
-                <View style={styles.recommendationsContainer}>
-                  <Text style={[styles.recommendationsTitle, { color: theme.accent }]}>
-                    💡 추천사항
-                  </Text>
-                  {personaComparison.recommendations.map((rec, index) => (
-                    <Text key={index} style={[styles.recommendationText, { color: theme.text }]}>
-                      • {rec}
-                    </Text>
-                  ))}
-                </View>
-              )}
             </View>
           )}
 
@@ -741,6 +689,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     textAlign: 'center',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 24,
+  },
+  emptyStateDescription: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
