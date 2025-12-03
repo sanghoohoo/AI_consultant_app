@@ -29,6 +29,9 @@ interface Message {
   sender: 'user' | 'assistant';
   created_at: string;
   timestamp?: number;
+  pending_id?: string | null;
+  cache_id?: string | null;
+  feedback?: 'like' | 'dislike' | null;
 }
 
 interface CustomDrawerContentProps extends DrawerContentComponentProps {
@@ -280,6 +283,48 @@ function ChatScreen({
     }
   };
 
+  const handleFeedback = async (message: Message, feedbackType: 'like' | 'dislike') => {
+    if (message.feedback) {
+      // 이미 피드백을 제공한 경우
+      Alert.alert('안내', '이미 피드백을 제공한 메시지입니다.');
+      return;
+    }
+
+    const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const response = await fetch(`${API_URL}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userId,
+          type: feedbackType,
+        }),
+      });
+
+      if (response.ok) {
+        // 로컬 상태 업데이트
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === message.id
+              ? { ...msg, feedback: feedbackType }
+              : msg
+          )
+        );
+
+        // 성공 메시지 (간단하게)
+        // Alert.alert('감사합니다', '피드백이 반영되었습니다.');
+      } else {
+        Alert.alert('오류', '피드백 전송에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('피드백 전송 오류:', error);
+      Alert.alert('오류', '네트워크 오류가 발생했습니다.');
+    }
+  };
+
   const sendStreamingMessage = async () => {
     if (!inputText.trim() || botStreaming) return;
 
@@ -357,6 +402,9 @@ function ChatScreen({
             wsRef.current?.send(JSON.stringify(payload));
           };
 
+          let pendingId: string | null = null;
+          let cacheId: string | null = null;
+
           wsRef.current.onmessage = (e) => {
             try {
               const data = JSON.parse(e.data);
@@ -369,6 +417,8 @@ function ChatScreen({
                 // 최종 답변
                 setStatusMessage("");
                 botText = data.message;
+                pendingId = data.pending_id || null;
+                cacheId = data.cache_id || null;
                 setStreamedBotMessage(botText);
               } else if (data.type === 'done') {
                 // 완료
@@ -397,24 +447,27 @@ function ChatScreen({
 
           wsRef.current.onclose = async () => {
             setBotStreaming(false);
-            
+
             const botMessage: Message = {
               id: (Date.now() + 1).toString(),
               session_id: currentSessionId!,
               content: botText || 'AI 응답이 없습니다.',
               sender: 'assistant',
               created_at: new Date().toISOString(),
+              pending_id: pendingId,
+              cache_id: cacheId,
+              feedback: null,
             };
-            
+
             await supabase.from('chat_messages').insert([{
               session_id: currentSessionId!,
               content: botMessage.content,
               sender: 'assistant'
             }]);
-            
+
             setMessages((prev: Message[]) => [...prev, botMessage]);
             setStreamedBotMessage("");
-            
+
             const updatedMessages = [...messages, userMsg, botMessage];
             summarizeSession(currentSessionId!, updatedMessages);
           };
@@ -447,22 +500,61 @@ function ChatScreen({
         item.sender === 'user' ? styles.userMessageWrapper : styles.aiMessageWrapper
       ]}
     >
-      <View
-        style={[
-          styles.messageBubble,
-          item.sender === 'user' 
-            ? { ...styles.userMessage, backgroundColor: themeColors.userMessageBg }
-            : { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }
-        ]}
-      >
-        {item.sender === 'user' ? (
-          <Text style={[styles.messageText, styles.userMessageText]}>
-            {item.content}
-          </Text>
-        ) : (
-          <MarkdownDisplay style={markdownStyles}>
-            {item.content}
-          </MarkdownDisplay>
+      <View style={{ alignItems: item.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
+        <View
+          style={[
+            styles.messageBubble,
+            item.sender === 'user'
+              ? { ...styles.userMessage, backgroundColor: themeColors.userMessageBg }
+              : { ...styles.aiMessage, backgroundColor: themeColors.aiMessageBg }
+          ]}
+        >
+          {item.sender === 'user' ? (
+            <Text style={[styles.messageText, styles.userMessageText]}>
+              {item.content}
+            </Text>
+          ) : (
+            <MarkdownDisplay style={markdownStyles}>
+              {item.content}
+            </MarkdownDisplay>
+          )}
+        </View>
+
+        {/* AI 메시지에 피드백 버튼 추가 */}
+        {item.sender === 'assistant' && (item.pending_id || item.cache_id) && (
+          <View style={styles.feedbackContainer}>
+            <TouchableOpacity
+              style={[
+                styles.feedbackButton,
+                item.feedback === 'like' && { backgroundColor: '#E3F2FD' }
+              ]}
+              onPress={() => handleFeedback(item, 'like')}
+              disabled={!!item.feedback}
+            >
+              <Text style={[
+                styles.feedbackButtonText,
+                item.feedback === 'like' && { color: '#007AFF' }
+              ]}>
+                👍 {item.feedback === 'like' ? '좋아요' : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.feedbackButton,
+                item.feedback === 'dislike' && { backgroundColor: '#FFEBEE' }
+              ]}
+              onPress={() => handleFeedback(item, 'dislike')}
+              disabled={!!item.feedback}
+            >
+              <Text style={[
+                styles.feedbackButtonText,
+                item.feedback === 'dislike' && { color: '#FF5252' }
+              ]}>
+                👎 {item.feedback === 'dislike' ? '싫어요' : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </View>
@@ -817,5 +909,22 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  feedbackContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    gap: 8,
+  },
+  feedbackButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  feedbackButtonText: {
+    fontSize: 13,
+    color: '#666',
   },
 });
