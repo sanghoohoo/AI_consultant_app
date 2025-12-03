@@ -520,38 +520,15 @@ function ChatScreen({
           )}
         </View>
 
-        {/* AI 메시지에 피드백 버튼 추가 */}
-        {item.sender === 'assistant' && (item.pending_id || item.cache_id) && (
+        {/* AI 메시지에 좋아요 버튼 추가 */}
+        {item.sender === 'assistant' && (item.pending_id || item.cache_id) && !item.feedback && (
           <View style={styles.feedbackContainer}>
             <TouchableOpacity
-              style={[
-                styles.feedbackButton,
-                item.feedback === 'like' && { backgroundColor: '#E3F2FD' }
-              ]}
+              style={styles.feedbackButton}
               onPress={() => handleFeedback(item, 'like')}
-              disabled={!!item.feedback}
             >
-              <Text style={[
-                styles.feedbackButtonText,
-                item.feedback === 'like' && { color: '#007AFF' }
-              ]}>
-                👍 {item.feedback === 'like' ? '좋아요' : ''}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.feedbackButton,
-                item.feedback === 'dislike' && { backgroundColor: '#FFEBEE' }
-              ]}
-              onPress={() => handleFeedback(item, 'dislike')}
-              disabled={!!item.feedback}
-            >
-              <Text style={[
-                styles.feedbackButtonText,
-                item.feedback === 'dislike' && { color: '#FF5252' }
-              ]}>
-                👎 {item.feedback === 'dislike' ? '싫어요' : ''}
+              <Text style={styles.feedbackButtonText}>
+                👍 도움이 됐어요
               </Text>
             </TouchableOpacity>
           </View>
